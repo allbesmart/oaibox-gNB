@@ -221,7 +221,7 @@ void fill_default_secondaryCellGroup(NR_ServingCellConfigCommon_t *servingcellco
   if (servingcellconfigdedicated->uplinkConfig->uplinkBWP_ToAddModList) {
     pusch_Config = servingcellconfigdedicated->uplinkConfig->uplinkBWP_ToAddModList->list.array[0]->bwp_Dedicated->pusch_Config->choice.setup;
   }
-  initialUplinkBWP->pusch_Config = config_pusch(pusch_Config);
+  initialUplinkBWP->pusch_Config = config_pusch(pusch_Config, servingcellconfigcommon, uecap);
 
   long maxMIMO_Layers = servingcellconfigdedicated->uplinkConfig &&
                                 servingcellconfigdedicated->uplinkConfig->pusch_ServingCellConfig &&
@@ -275,7 +275,6 @@ void fill_default_secondaryCellGroup(NR_ServingCellConfigCommon_t *servingcellco
     secondaryCellGroup->spCellConfig->spCellConfigDedicated->uplinkConfig->firstActiveUplinkBWP_Id = calloc(1,sizeof(*secondaryCellGroup->spCellConfig->spCellConfigDedicated->uplinkConfig->firstActiveUplinkBWP_Id));
     *secondaryCellGroup->spCellConfig->spCellConfigDedicated->uplinkConfig->firstActiveUplinkBWP_Id = servingcellconfigdedicated->uplinkConfig->firstActiveUplinkBWP_Id ? *servingcellconfigdedicated->uplinkConfig->firstActiveUplinkBWP_Id : 1;
   }
-
   secondaryCellGroup->spCellConfig->spCellConfigDedicated->bwp_InactivityTimer = NULL;
   secondaryCellGroup->spCellConfig->spCellConfigDedicated->downlinkBWP_ToReleaseList= NULL;
   secondaryCellGroup->spCellConfig->spCellConfigDedicated->uplinkConfig->uplinkBWP_ToReleaseList = NULL;
