@@ -37,6 +37,7 @@
 \param symbol symbol within slot
 \param bwp_start_subcarrier, first allocated subcarrier
 \param nb_rb_pusch, number of allocated RBs for this UE
+\param max_ch maximum value of estimated channel
 */
 
 int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
@@ -45,7 +46,8 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
                                 unsigned char symbol,
                                 int ul_id,
                                 unsigned short bwp_start_subcarrier,
-                                nfapi_nr_pusch_pdu_t *pusch_pdu);
+                                nfapi_nr_pusch_pdu_t *pusch_pdu,
+                                int *max_ch);
 
 void dump_nr_I0_stats(FILE *fd,PHY_VARS_gNB *gNB);
 
@@ -53,7 +55,7 @@ void gNB_I0_measurements(PHY_VARS_gNB *gNB,int slot,int first_symb,int num_symb)
 
 void nr_gnb_measurements(PHY_VARS_gNB *gNB, uint8_t ulsch_id, unsigned char harq_pid, unsigned char symbol, uint8_t nrOfLayers);
 
-int nr_est_timing_advance_pusch(PHY_VARS_gNB* phy_vars_gNB, int UE_id);
+void nr_est_timing_advance_pusch(PHY_VARS_gNB *gNB, int ULSCH_id, int ant_rx);
 
 int nr_est_timing_advance_srs(const NR_DL_FRAME_PARMS *frame_parms,
                               const int32_t srs_estimated_channel_time[][frame_parms->ofdm_symbol_size]);
