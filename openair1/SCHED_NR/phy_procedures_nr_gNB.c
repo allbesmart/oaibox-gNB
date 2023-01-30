@@ -208,13 +208,15 @@ void phy_procedures_gNB_TX(processingData_L1tx_t *msgTx,
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_PROCEDURES_gNB_TX+offset,0);
 }
 
-void nr_postDecode(PHY_VARS_gNB *gNB, notifiedFIFO_elt_t *req) {
+void nr_postDecode(PHY_VARS_gNB *gNB, notifiedFIFO_elt_t *req, int *decodeSuccessCount) {
   ldpcDecode_t *rdata = (ldpcDecode_t*) NotifiedFifoData(req);
   NR_UL_gNB_HARQ_t *ulsch_harq = rdata->ulsch_harq;
   NR_gNB_ULSCH_t *ulsch = rdata->ulsch;
   int r = rdata->segment_r;
   nfapi_nr_pusch_pdu_t *pusch_pdu = &gNB->ulsch[rdata->ulsch_id]->harq_processes[rdata->harq_pid]->ulsch_pdu;
   bool decodeSuccess = (rdata->decodeIterations <= rdata->decoderParms.numMaxIter);
+  if (decodeSuccess)
+    (*decodeSuccessCount)++;
   ulsch_harq->processedSegments++;
   LOG_D(PHY, "processing result of segment: %d, processed %d/%d\n",
 	rdata->segment_r, ulsch_harq->processedSegments, rdata->nbSegments);
@@ -224,24 +226,25 @@ void nr_postDecode(PHY_VARS_gNB *gNB, notifiedFIFO_elt_t *req) {
     memcpy(ulsch_harq->b+rdata->offset,
            ulsch_harq->c[r],
            rdata->Kr_bytes - (ulsch_harq->F>>3) -((ulsch_harq->C>1)?3:0));
-
   } else {
-    if ( rdata->nbSegments != ulsch_harq->processedSegments ) {
-      int nb = abortTpoolJob(&gNB->threadPool, req->key);
-      nb += abortNotifiedFIFOJob(&gNB->respDecode, req->key);
-      gNB->nbDecode-=nb;
-      LOG_D(PHY,"uplink segment error %d/%d, aborted %d segments\n",rdata->segment_r,rdata->nbSegments, nb);
-      LOG_D(PHY, "ULSCH %d in error\n",rdata->ulsch_id);
-      AssertFatal(ulsch_harq->processedSegments+nb == rdata->nbSegments,"processed: %d, aborted: %d, total %d\n",
-		  ulsch_harq->processedSegments, nb, rdata->nbSegments);
-      ulsch_harq->processedSegments=rdata->nbSegments;
-    }
+    LOG_D(PHY,"uplink segment error %d/%d\n",rdata->segment_r,rdata->nbSegments);
+    LOG_D(PHY, "ULSCH %d in error\n",rdata->ulsch_id);
   }
 
   //int dumpsig=0;
   // if all segments are done
   if (rdata->nbSegments == ulsch_harq->processedSegments) {
-    if (decodeSuccess && !gNB->pusch_vars[rdata->ulsch_id]->DTX) {
+    /* check global CRC */
+    if (*decodeSuccessCount == rdata->nbSegments && rdata->nbSegments > 1) {
+      int A = ulsch_harq->TBS * 8;
+      int crc_length = A > 3824 ? 3 : 2;
+      int crc_type   = A > 3824 ? CRC24_A : CRC16;
+      if (!check_crc(ulsch_harq->b, A + crc_length*8, 0 /* F - unused */, crc_type)) {
+        *decodeSuccessCount = 0;
+        LOG_E(PHY, "LDPC global CRC fails, but individual LDPC CRC succeeded\n");
+      }
+    }
+    if (*decodeSuccessCount == rdata->nbSegments && !gNB->pusch_vars[rdata->ulsch_id]->DTX) {
       LOG_D(PHY,"[gNB %d] ULSCH: Setting ACK for SFN/SF %d.%d (pid %d, ndi %d, status %d, round %d, TBS %d, Max interation (all seg) %d)\n",
             gNB->Mod_id,ulsch_harq->frame,ulsch_harq->slot,rdata->harq_pid,pusch_pdu->pusch_data.new_data_indicator,ulsch_harq->status,ulsch_harq->round,ulsch_harq->TBS,rdata->decodeIterations);
       ulsch_harq->status = SCH_IDLE;
@@ -379,11 +382,12 @@ void nr_ulsch_procedures(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx, int ULSCH
                     harq_pid,
                     G);
   if (enable_ldpc_offload ==0) {
+    int decodeSuccessCount = 0;
     while (gNB->nbDecode > 0) {
       notifiedFIFO_elt_t *req = pullTpool(&gNB->respDecode, &gNB->threadPool);
       if (req == NULL)
 	break; // Tpool has been stopped
-      nr_postDecode(gNB, req);
+      nr_postDecode(gNB, req, &decodeSuccessCount);
       delNotifiedFIFO_elt(req);
     }
   } 
@@ -848,6 +852,15 @@ int phy_procedures_gNB_uespec_RX(PHY_VARS_gNB *gNB, int frame_rx, int slot_rx) {
                   Therefore, we don't yet call nr_fill_indication, it will be called later */
                nr_fill_indication(gNB,frame_rx, slot_rx, ULSCH_id, harq_pid, 1,1);
                pusch_DTX++;
+               /* if round == 0 we need to clear some data because nr_ulsch_decoding() won't do it for the retransmissions */
+               if (ulsch_harq->round == 0) {
+                 int r;
+                 LOG_D(PHY, "DTX for round 0, clear mandatory data\n");
+                 for (r = 0; r < ulsch->a_segments; r++) {
+                   ulsch_harq->crc_ok[r] = false;
+                   memset(ulsch_harq->d[r], 0, (68*384)*sizeof(int16_t));
+                 }
+               }
                continue;
              }
           } else {

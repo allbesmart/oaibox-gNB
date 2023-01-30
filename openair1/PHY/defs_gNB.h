@@ -227,6 +227,8 @@ typedef struct {
   uint32_t B;
   /// Pointers to code blocks after code block segmentation and CRC attachment (38.212 V15.4.0 section 5.2.2)
   uint8_t **c;
+  /// array to indicate that a segment has a valid CRC from a previous transmission to not run LDPC decoder again in a retransmission
+  bool *crc_ok;
   /// Number of bits in each code block (38.212 V15.4.0 section 5.2.2)
   uint32_t K;
   /// Number of "Filler" bits added in the code block segmentation (38.212 V15.4.0 section 5.2.2)
@@ -244,6 +246,11 @@ typedef struct {
   /// Last index of LLR buffer that contains information.
   /// Used for computing LDPC decoder R
   int llrLen;
+  /// used to indicate to remaining threads that LDPC decoding has to be skipped
+  /// this is set to true when a crc fails to avoid unnecessary computation
+  /// all accesses must be done with __atomic operations
+  /// (we can't use bool, it does not work with __atomic operations)
+  uint8_t skip_ldpc_decoding;
   //////////////////////////////////////////////////////////////
 } NR_UL_gNB_HARQ_t;
 
@@ -261,6 +268,8 @@ typedef struct {
   uint8_t max_ldpc_iterations;
   /// number of iterations used in last LDPC decoding
   uint8_t last_iteration_cnt;  
+  /// max number of segments for LDPC decoding
+  int a_segments;
 } NR_gNB_ULSCH_t;
 
 typedef struct {

@@ -78,6 +78,7 @@ void free_gNB_ulsch(NR_gNB_ULSCH_t **ulschptr, uint16_t N_RB_UL)
       }
       free_and_zero(ulsch->harq_processes[i]->c);
       free_and_zero(ulsch->harq_processes[i]->d);
+      free_and_zero(ulsch->harq_processes[i]->crc_ok);
       free_and_zero(ulsch->harq_processes[i]);
       ulsch->harq_processes[i] = NULL;
     }
@@ -102,11 +103,13 @@ NR_gNB_ULSCH_t *new_gNB_ulsch(uint8_t max_ldpc_iterations, uint16_t N_RB_UL)
   ulsch = (NR_gNB_ULSCH_t *)malloc16_clear(sizeof(NR_gNB_ULSCH_t));
 
   ulsch->max_ldpc_iterations = max_ldpc_iterations;
+  ulsch->a_segments = a_segments;
 
   for (i=0; i<NR_MAX_ULSCH_HARQ_PROCESSES; i++) {
     ulsch->harq_processes[i] = (NR_UL_gNB_HARQ_t *)malloc16_clear(sizeof(NR_UL_gNB_HARQ_t));
     ulsch->harq_processes[i]->b = (uint8_t*)malloc16_clear(ulsch_bytes);
     ulsch->harq_processes[i]->c = (uint8_t**)malloc16_clear(a_segments*sizeof(uint8_t *));
+    ulsch->harq_processes[i]->crc_ok = malloc16_clear(a_segments*sizeof(bool));
     ulsch->harq_processes[i]->d = (int16_t**)malloc16_clear(a_segments*sizeof(int16_t *));
     for (r=0; r<a_segments; r++) {
       ulsch->harq_processes[i]->c[r] = (uint8_t*)malloc16_clear(8448*sizeof(uint8_t));
@@ -165,6 +168,11 @@ void nr_processULSegment(void* arg) {
   ldpcDecode_t *rdata = (ldpcDecode_t*) arg;
   PHY_VARS_gNB *phy_vars_gNB = rdata->gNB;
   NR_UL_gNB_HARQ_t *ulsch_harq = rdata->ulsch_harq;
+  if (ulsch_harq->crc_ok[rdata->segment_r]) {
+    LOG_D(PHY, "segment %d already decoded in a previous transmission, do nothing\n", rdata->segment_r);
+    rdata->decodeIterations = 0;
+    return;
+  }
   t_nrLDPC_dec_params *p_decoderParms = &rdata->decoderParms;
   int length_dec;
   int no_iteration_ldpc;
@@ -252,6 +260,15 @@ void nr_processULSegment(void* arg) {
     stop_meas(&phy_vars_gNB->ulsch_rate_unmatching_stats);
   }
 
+  /* don't run LDPC decoding if some other thread had a failure */
+  /* nr_rate_matching_ldpc_rx() must be called to feed d[r] in all cases
+   * so this test has to come after the call to nr_rate_matching_ldpc_rx()
+   */
+  if (__atomic_load_n(&ulsch_harq->skip_ldpc_decoding, __ATOMIC_SEQ_CST)) {
+    LOG_D(PHY, "skipping nrLDPC_decoder() for r %d because decoding of some other segment failed\n", r);
+    return;
+  }
+
   memset(ulsch_harq->c[r],0,Kr_bytes);
 
   if (ulsch_harq->C == 1) {
@@ -302,11 +319,15 @@ void nr_processULSegment(void* arg) {
 #endif
     rdata->decodeIterations = no_iteration_ldpc;
     if (rdata->decodeIterations > p_decoderParms->numMaxIter) rdata->decodeIterations--;
+    /* remember that the data is ok to not decode it again in case of retransmission */
+    ulsch_harq->crc_ok[r] = true;
   } else {
 #ifdef PRINT_CRC_CHECK
       LOG_I(PHY,"CRC NOK\n");
 #endif
     rdata->decodeIterations = max_ldpc_iterations + 1;
+    /* set skip_ldpc_decoding to 1 to indicate to remaining threads that they shall not run LDPC decoding */
+    __atomic_store_n(&ulsch_harq->skip_ldpc_decoding, 1, __ATOMIC_SEQ_CST);
   }
 
   for (int m=0; m < Kr>>3; m ++) {
@@ -623,6 +644,9 @@ uint32_t nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
   else {
     dtx_det = 0;
 
+    /* tell to the threads that LDPC decoding has to be done */
+    __atomic_store_n(&harq_process->skip_ldpc_decoding, 0, __ATOMIC_SEQ_CST);
+
     for (int r = 0; r < harq_process->C; r++) {
       int E = nr_get_E(G, harq_process->C, Qm, n_layers, r);
       union ldpcReqUnion id = {.s = {ulsch->rnti, frame, nr_tti_rx, 0, 0}};
@@ -647,6 +671,9 @@ uint32_t nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
       rdata->ulsch = ulsch;
       rdata->ulsch_id = ULSCH_id;
       rdata->tbslbrm = pusch_pdu->maintenance_parms_v3.tbSizeLbrmBytes;
+      /* in case of a new rx, tell nr_processULSegment() to process the data, so set crc_ok[r] to false */
+      if (harq_process->new_rx)
+        harq_process->crc_ok[r] = false;
       pushTpool(&phy_vars_gNB->threadPool, req);
       phy_vars_gNB->nbDecode++;
       LOG_D(PHY, "Added a block to decode, in pipe: %d\n", phy_vars_gNB->nbDecode);
