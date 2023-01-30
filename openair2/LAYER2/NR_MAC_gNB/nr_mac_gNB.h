@@ -814,6 +814,9 @@ typedef struct gNB_MAC_INST_s {
   int16_t frame;
   int16_t slot;
 
+  // Temporary workaround to avoid scheduling ULSCH in flexible slots after a NR_RRCReestablishment procedure
+  uint32_t reestablishments_count;
+
 } gNB_MAC_INST;
 
 #endif /*__LAYER2_NR_MAC_GNB_H__ */

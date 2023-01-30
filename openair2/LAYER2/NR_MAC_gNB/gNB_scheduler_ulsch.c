@@ -1838,6 +1838,13 @@ bool nr_fr1_ulsch_preprocessor(module_id_t module_id, frame_t frame, sub_frame_t
   if (!is_xlsch_in_slot(nr_mac->ulsch_slot_bitmap[sched_slot / 64], sched_slot))
     return false;
 
+  // Temporary workaround to avoid scheduling ULSCH in flexible slots after a NR_RRCReestablishment procedure
+  if (nr_mac->reestablishments_count > 0) {
+    if (is_xlsch_in_slot(nr_mac->dlsch_slot_bitmap[sched_slot / 64], sched_slot)) {
+      return false;
+    }
+  }
+
   sched_ctrl->sched_pusch.slot = sched_slot;
   sched_ctrl->sched_pusch.frame = sched_frame;
   UE_iterator(nr_mac->UE_info.list, UE2) {
