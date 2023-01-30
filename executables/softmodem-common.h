@@ -131,6 +131,7 @@ extern "C"
 #define NON_STOP            softmodem_params.non_stop
 #define EMULATE_L1          softmodem_params.emulate_l1
 #define CONTINUOUS_TX       softmodem_params.continuous_tx
+#define TENANTID            softmodem_params.tenantId
 
 #define DEFAULT_RFCONFIG_FILE    "/usr/local/etc/syriq/ue.band7.tm1.PRB100.NR40.dat";
 
@@ -171,7 +172,8 @@ extern int usrp_tx_thread;
     {"non-stop",             CONFIG_HLP_NONSTOP,      PARAMFLAG_BOOL, iptr:&NON_STOP,                     defintval:0,           TYPE_INT,    0},                     \
     {"emulate-l1",           CONFIG_L1_EMULATOR,      PARAMFLAG_BOOL, iptr:&EMULATE_L1,                   defintval:0,           TYPE_INT,    0},                     \
     {"continuous-tx",        CONFIG_HLP_CONTINUOUS_TX,PARAMFLAG_BOOL, iptr:&CONTINUOUS_TX,                defintval:0,           TYPE_INT,    0},                     \
-    {"disable-stats",        CONFIG_HLP_STATS_DISABLE, PARAMFLAG_BOOL, iptr:&stats_disabled,               defintval:0,           TYPE_INT,    0},                     \
+    {"disable-stats",        CONFIG_HLP_STATS_DISABLE, PARAMFLAG_BOOL, iptr:&stats_disabled,               defintval:0,           TYPE_INT,    0},                    \
+    {"tenantId",             NULL,                    0,              strptr:&TENANTID,                   defstrval:NULL,         TYPE_STRING, 0},      \
   }
 
 #define CONFIG_HLP_NSA           "Enable NSA mode \n"
@@ -268,6 +270,7 @@ typedef struct {
   int            non_stop;
   int            emulate_l1;
   int            continuous_tx;
+  char           *tenantId;
 } softmodem_params_t;
 
 extern uint64_t get_softmodem_optmask(void);

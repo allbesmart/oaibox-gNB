@@ -644,6 +644,7 @@ typedef struct NR_mac_stats {
 typedef struct NR_bler_options {
   double upper;
   double lower;
+  uint8_t min_mcs;
   uint8_t max_mcs;
   uint8_t harq_round_max;
 } NR_bler_options_t;

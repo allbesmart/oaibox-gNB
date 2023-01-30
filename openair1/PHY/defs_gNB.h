@@ -533,6 +533,8 @@ typedef struct gNB_L1_proc_t_s {
   int RU_mask_prach;
   /// set of scheduling variables RXn-TXnp4 threads
   gNB_L1_rxtx_proc_t L1_proc, L1_proc_tx;
+  /// pthread structure for dumping gNB stats
+  pthread_t oaibox_data_export_thread;
 } gNB_L1_proc_t;
 
 
