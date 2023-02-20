@@ -606,6 +606,13 @@ static void release_sched_response(int sched_response_id)
 
 void deref_sched_response(int sched_response_id)
 {
+  /* simulators (ulsim/dlsim) deal with their own sched_response but call
+   * functions that call this one, let's handle this case with a special
+   * value -1 where we do nothing (yes it's a hack)
+   */
+  if (sched_response_id == -1)
+    return;
+
   if (pthread_mutex_lock(&resp_mutex))
     AssertFatal(0, "pthread_mutex_lock failed\n");
 
@@ -619,6 +626,13 @@ void deref_sched_response(int sched_response_id)
 
 void inc_ref_sched_response(int sched_response_id)
 {
+  /* simulators (ulsim/dlsim) deal with their own sched_response but call
+   * functions that call this one, let's handle this case with a special
+   * value -1 where we do nothing (yes it's a hack)
+   */
+  if (sched_response_id == -1)
+    return;
+
   if (pthread_mutex_lock(&resp_mutex))
     AssertFatal(0, "pthread_mutex_lock failed\n");
 
