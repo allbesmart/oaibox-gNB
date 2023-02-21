@@ -173,6 +173,12 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                            stats->ul.lc_bytes[lc_id]);
     }
   }
+  if (gNB->reestablishments_count > 0) {
+    output += snprintf(output,
+                       end - output,
+                       "NR_RRCReestablishments: %d\n",
+                       gNB->reestablishments_count);
+  }
   pthread_mutex_unlock(&gNB->UE_info.mutex);
   return output - begin;
 }
@@ -230,6 +236,8 @@ void mac_top_init_gNB(ngran_node_t node_type)
       RC.nrmac[i]->ul_handle = 0;
 
       RC.nrmac[i]->first_MIB = true;
+
+      RC.nrmac[i]->reestablishments_count = 0;
 
       pthread_mutex_init(&RC.nrmac[i]->UE_info.mutex, NULL);
       uid_linear_allocator_init(&RC.nrmac[i]->UE_info.uid_allocator);

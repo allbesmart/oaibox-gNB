@@ -2793,6 +2793,9 @@ rrc_gNB_decode_dcch(
 
           gNB_MAC_INST *nrmac = RC.nrmac[ctxt_pP->module_id]; // WHAT A BEAUTIFULL RACE CONDITION !!!
           mac_remove_nr_ue(nrmac, reestablish_rnti);
+
+          // Temporary workaround to avoid scheduling ULSCH in flexible slots after a NR_RRCReestablishment procedure
+          nrmac->reestablishments_count++;
         }
 
         // ue_context_p->ue_context.ue_release_timer = 0;
