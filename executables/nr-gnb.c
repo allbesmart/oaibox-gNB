@@ -86,7 +86,7 @@
 #include <openair1/PHY/NR_TRANSPORT/nr_ulsch.h>
 #include <openair1/PHY/NR_TRANSPORT/nr_dlsch.h>
 #include <PHY/NR_ESTIMATION/nr_ul_estimation.h>
-
+#include <oaibox_data_export.h>
 //#define USRP_DEBUG 1
 // Fix per CC openair rf/if device update
 // extern openair0_device openair0;
@@ -477,6 +477,7 @@ void init_gNB_Tpool(int inst) {
   threadCreate(&proc->pthread_tx_reorder, tx_reorder_thread, (void *)gNB, "thread_tx_reorder", 
 		  gNB->RU_list[0] ? gNB->RU_list[0]->tpcores[1] : -1, OAI_PRIORITY_RT_MAX);
 
+  threadCreate(&proc->oaibox_data_export_thread, oaibox_data_export_func, (void *)NULL, "oaibox_data_export_thread", -1, OAI_PRIORITY_RT_LOW);
 }
 
 
