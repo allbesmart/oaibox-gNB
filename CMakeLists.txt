@@ -2433,6 +2433,7 @@ add_executable(nr-softmodem
   ${XFORMSINTERFACE_SOURCE}
   ${T_SOURCE}
   ${SHLIB_LOADER_SOURCES}
+  ${OPENAIR_DIR}/executables/oaibox_data_export.c
   )
 
 target_link_libraries(nr-softmodem PRIVATE
