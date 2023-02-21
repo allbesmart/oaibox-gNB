@@ -204,11 +204,12 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
 #endif
 
     if (pusch_pdu->dmrs_config_type == pusch_dmrs_type1 && chest_freq == 0) {
-      c16_t *pil   = pilot;
-      int re_offset = k0;
-      LOG_D(PHY,"PUSCH estimation DMRS type 1, Freq-domain interpolation");
+      LOG_D(PHY, "PUSCH estimation DMRS type 1, Freq-domain interpolation\n");
+
       // For configuration type 1: k = 4*n + 2*k' + delta,
       // where k' is 0 or 1, and delta is in Table 6.4.1.1.3-1 from TS 38.211
+      c16_t *pil = pilot;
+      int re_offset = k0;
       int pilot_cnt = 0;
       int delta = nr_pusch_dmrs_delta(pusch_dmrs_type1, p);
 
