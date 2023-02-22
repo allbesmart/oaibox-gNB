@@ -113,6 +113,11 @@ int newGtpuDeleteAllTunnels(instance_t instance, ue_id_t ue_id) {
   return 0;
 }
 
+int nr_derive_key_ng_ran_star(uint16_t pci, uint64_t nr_arfcn_dl, const uint8_t key[32], uint8_t *key_ng_ran_star)
+{
+  return 0;
+}
+
 extern void fix_scd(NR_ServingCellConfig_t *scd);// forward declaration
 
 int8_t nr_mac_rrc_data_ind_ue(const module_id_t module_id,

@@ -117,6 +117,11 @@ int newGtpuDeleteAllTunnels(instance_t instance, ue_id_t ue_id) {
   return 0;
 }
 
+int nr_derive_key_ng_ran_star(uint16_t pci, uint64_t nr_arfcn_dl, const uint8_t key[32], uint8_t *key_ng_ran_star)
+{
+  return 0;
+}
+
 // dummy functions
 int dummy_nr_ue_ul_indication(nr_uplink_indication_t *ul_info)              { return(0);  }
 
