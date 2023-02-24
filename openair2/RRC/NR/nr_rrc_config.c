@@ -1012,7 +1012,7 @@ void set_ul_mcs_table(NR_UE_NR_Capability_t *cap,
        *pusch_Config->transformPrecoder == NR_PUSCH_Config__transformPrecoder_disabled) {
       if(pusch_Config->mcs_Table == NULL)
         pusch_Config->mcs_Table = calloc(1, sizeof(*pusch_Config->mcs_Table));
-      *pusch_Config->mcs_Table = NR_PDSCH_Config__mcs_Table_qam256;
+      *pusch_Config->mcs_Table = NR_PUSCH_Config__mcs_Table_qam256;
     }
     else {
       if(pusch_Config->mcs_TableTransformPrecoder == NULL)
@@ -1338,7 +1338,7 @@ void config_uplinkBWP(NR_BWP_Uplink_t *ubwp,
      bwp_loop < servingcellconfigdedicated->uplinkConfig->uplinkBWP_ToAddModList->list.count) {
     pusch_Config = servingcellconfigdedicated->uplinkConfig->uplinkBWP_ToAddModList->list.array[bwp_loop]->bwp_Dedicated->pusch_Config->choice.setup;
   }
-  ubwp->bwp_Dedicated->pusch_Config = config_pusch(pusch_Config, scc, uecap);
+  ubwp->bwp_Dedicated->pusch_Config = config_pusch(pusch_Config, scc, configuration->force_256qam_off ? NULL : uecap);
 
   long maxMIMO_Layers = servingcellconfigdedicated &&
                                 servingcellconfigdedicated->uplinkConfig
