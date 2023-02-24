@@ -548,19 +548,19 @@ static int resp_refcount[N_RESP];
 static int resp_freelist_next[N_RESP];
 static int resp_freelist_head;
 static pthread_mutex_t resp_mutex = PTHREAD_MUTEX_INITIALIZER;
+static bool resp_freelist_inited = false;
 
 void init_sched_response(void)
 {
   /* init only once */
-  static int inited = 0;
   if (pthread_mutex_lock(&resp_mutex))
     AssertFatal(0, "pthread_mutex_lock failed\n");
-  if (inited) {
+  if (resp_freelist_inited) {
     if (pthread_mutex_unlock(&resp_mutex))
       AssertFatal(0, "pthread_mutex_unlock failed\n");
     return;
   }
-  inited = 1;
+  resp_freelist_inited = true;
   if (pthread_mutex_unlock(&resp_mutex))
     AssertFatal(0, "pthread_mutex_unlock failed\n");
 
@@ -578,6 +578,8 @@ NR_Sched_Rsp_t *allocate_sched_response(void)
 
   if (pthread_mutex_lock(&resp_mutex))
     AssertFatal(0, "pthread_mutex_lock failed\n");
+
+  AssertFatal(resp_freelist_inited, "sched_response used before init\n");
 
   if (resp_freelist_head == -1) {
     LOG_E(PHY, "fatal: sched_response cannot be allocated, increase N_RESP\n");
@@ -616,6 +618,9 @@ void deref_sched_response(int sched_response_id)
   if (pthread_mutex_lock(&resp_mutex))
     AssertFatal(0, "pthread_mutex_lock failed\n");
 
+  AssertFatal(resp_freelist_inited, "sched_response used before init\n");
+  AssertFatal(resp_refcount[sched_response_id] > 0, "sched_reponse decreased too much\n");
+
   resp_refcount[sched_response_id]--;
   if (resp_refcount[sched_response_id] == 0)
     release_sched_response(sched_response_id);
@@ -635,6 +640,8 @@ void inc_ref_sched_response(int sched_response_id)
 
   if (pthread_mutex_lock(&resp_mutex))
     AssertFatal(0, "pthread_mutex_lock failed\n");
+
+  AssertFatal(resp_freelist_inited, "sched_response used before init\n");
 
   resp_refcount[sched_response_id]++;
 
