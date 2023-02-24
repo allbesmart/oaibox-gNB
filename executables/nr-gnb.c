@@ -126,6 +126,8 @@ void tx_func(void *param) {
                         1);
   clock_gettime(CLOCK_MONOTONIC,&info->gNB->rt_L1_profiling.return_L1_TX[rt_prof_idx]);
 
+  /* this thread is done with the sched_info, decrease the reference counter */
+  deref_sched_response(info->sched_response_id);
 }
 
 void rx_func(void *param) {

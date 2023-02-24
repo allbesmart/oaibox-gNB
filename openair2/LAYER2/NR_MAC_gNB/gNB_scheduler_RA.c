@@ -661,8 +661,11 @@ void nr_initiate_ra_proc(module_id_t module_idP,
   VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_INITIATE_RA_PROC, 0);
 }
 
-void nr_schedule_RA(module_id_t module_idP, frame_t frameP, sub_frame_t slotP) {
-
+void nr_schedule_RA(module_id_t module_idP, frame_t frameP, sub_frame_t slotP,
+                    nfapi_nr_ul_dci_request_t *ul_dci_req,
+                    nfapi_nr_dl_tti_request_t *DL_req,
+                    nfapi_nr_tx_data_request_t *TX_req)
+{
   gNB_MAC_INST *mac = RC.nrmac[module_idP];
 
   start_meas(&mac->schedule_ra);
@@ -673,13 +676,13 @@ void nr_schedule_RA(module_id_t module_idP, frame_t frameP, sub_frame_t slotP) {
       LOG_D(NR_MAC, "RA[state:%d]\n", ra->state);
       switch (ra->state) {
         case Msg2:
-          nr_generate_Msg2(module_idP, CC_id, frameP, slotP, ra);
+          nr_generate_Msg2(module_idP, CC_id, frameP, slotP, ra, DL_req, TX_req);
           break;
         case Msg3_retransmission:
-          nr_generate_Msg3_retransmission(module_idP, CC_id, frameP, slotP, ra);
+          nr_generate_Msg3_retransmission(module_idP, CC_id, frameP, slotP, ra, ul_dci_req);
           break;
         case Msg4:
-          nr_generate_Msg4(module_idP, CC_id, frameP, slotP, ra);
+          nr_generate_Msg4(module_idP, CC_id, frameP, slotP, ra, DL_req, TX_req);
           break;
         case WAIT_Msg4_ACK:
           nr_check_Msg4_Ack(module_idP, CC_id, frameP, slotP, ra);
@@ -693,8 +696,10 @@ void nr_schedule_RA(module_id_t module_idP, frame_t frameP, sub_frame_t slotP) {
 }
 
 
-void nr_generate_Msg3_retransmission(module_id_t module_idP, int CC_id, frame_t frame, sub_frame_t slot, NR_RA_t *ra) {
-
+void nr_generate_Msg3_retransmission(module_id_t module_idP,
+        int CC_id, frame_t frame, sub_frame_t slot, NR_RA_t *ra,
+        nfapi_nr_ul_dci_request_t *ul_dci_req)
+{
   gNB_MAC_INST *nr_mac = RC.nrmac[module_idP];
   NR_COMMON_channels_t *cc = &nr_mac->common_channels[CC_id];
   NR_ServingCellConfigCommon_t *scc = cc->ServingCellConfigCommon;
@@ -778,8 +783,6 @@ void nr_generate_Msg3_retransmission(module_id_t module_idP, int CC_id, frame_t 
     NR_SearchSpace_t *ss = ra->ra_ss;
     NR_ControlResourceSet_t *coreset = ra->coreset;
     AssertFatal(coreset!=NULL,"Coreset cannot be null for RA-Msg3 retransmission\n");
-
-    nfapi_nr_ul_dci_request_t *ul_dci_req = &nr_mac->UL_dci_req[CC_id];
 
     const int coresetid = coreset->controlResourceSetId;
     nfapi_nr_dl_tti_pdcch_pdu_rel15_t *pdcch_pdu_rel15 = nr_mac->pdcch_pdu_idx[CC_id][coresetid];
@@ -1135,8 +1138,12 @@ void nr_add_msg3(module_id_t module_idP, int CC_id, frame_t frameP, sub_frame_t 
   nr_fill_rar(module_idP, ra, RAR_pdu, pusch_pdu);
 }
 
-void nr_generate_Msg2(module_id_t module_idP, int CC_id, frame_t frameP, sub_frame_t slotP, NR_RA_t *ra) {
-
+void nr_generate_Msg2(module_id_t module_idP,
+                      int CC_id, frame_t frameP, sub_frame_t slotP,
+                      NR_RA_t *ra,
+                      nfapi_nr_dl_tti_request_t *DL_req,
+                      nfapi_nr_tx_data_request_t *TX_req)
+{
   gNB_MAC_INST *nr_mac = RC.nrmac[module_idP];
   NR_COMMON_channels_t *cc = &nr_mac->common_channels[CC_id];
   NR_UE_DL_BWP_t *dl_bwp = &ra->DL_BWP;
@@ -1185,7 +1192,7 @@ void nr_generate_Msg2(module_id_t module_idP, int CC_id, frame_t frameP, sub_fra
     }
 
     // Checking if the DCI allocation is feasible in current subframe
-    nfapi_nr_dl_tti_request_body_t *dl_req = &nr_mac->DL_req[CC_id].dl_tti_request_body;
+    nfapi_nr_dl_tti_request_body_t *dl_req = &DL_req->dl_tti_request_body;
     if (dl_req->nPDUs > NFAPI_NR_MAX_DL_TTI_PDUS - 2) {
       LOG_I(NR_MAC, "[RAPROC] Subframe %d: FAPI DL structure is full, skip scheduling UE %d\n", slotP, ra->RA_rnti);
       return;
@@ -1357,7 +1364,7 @@ void nr_generate_Msg2(module_id_t module_idP, int CC_id, frame_t frameP, sub_fra
                        nr_mac->cset0_bwp_size);
 
     // DL TX request
-    nfapi_nr_pdu_t *tx_req = &nr_mac->TX_req[CC_id].pdu_list[nr_mac->TX_req[CC_id].Number_of_PDUs];
+    nfapi_nr_pdu_t *tx_req = &TX_req->pdu_list[TX_req->Number_of_PDUs];
 
     // Program UL processing for Msg3
     nr_get_Msg3alloc(module_idP, CC_id, scc, slotP, frameP, ra, nr_mac->tdd_beam_association);
@@ -1375,9 +1382,9 @@ void nr_generate_Msg2(module_id_t module_idP, int CC_id, frame_t frameP, sub_fra
     tx_req->PDU_index = pduindex;
     tx_req->num_TLV = 1;
     tx_req->TLVs[0].length = tx_req->PDU_length + 2;
-    nr_mac->TX_req[CC_id].SFN = frameP;
-    nr_mac->TX_req[CC_id].Number_of_PDUs++;
-    nr_mac->TX_req[CC_id].Slot = slotP;
+    TX_req->SFN = frameP;
+    TX_req->Number_of_PDUs++;
+    TX_req->Slot = slotP;
 
     // Mark the corresponding symbols RBs as used
     fill_pdcch_vrb_map(nr_mac,
@@ -1394,8 +1401,11 @@ void nr_generate_Msg2(module_id_t module_idP, int CC_id, frame_t frameP, sub_fra
   }
 }
 
-void nr_generate_Msg4(module_id_t module_idP, int CC_id, frame_t frameP, sub_frame_t slotP, NR_RA_t *ra) {
-
+void nr_generate_Msg4(module_id_t module_idP, int CC_id,
+                      frame_t frameP, sub_frame_t slotP, NR_RA_t *ra,
+                      nfapi_nr_dl_tti_request_t *DL_req,
+                      nfapi_nr_tx_data_request_t *TX_req)
+{
   gNB_MAC_INST *nr_mac = RC.nrmac[module_idP];
   NR_COMMON_channels_t *cc = &nr_mac->common_channels[CC_id];
   NR_UE_DL_BWP_t *dl_bwp = &ra->DL_BWP;
@@ -1474,7 +1484,7 @@ void nr_generate_Msg4(module_id_t module_idP, int CC_id, frame_t frameP, sub_fra
     }
 
     // Checking if the DCI allocation is feasible in current subframe
-    nfapi_nr_dl_tti_request_body_t *dl_req = &nr_mac->DL_req[CC_id].dl_tti_request_body;
+    nfapi_nr_dl_tti_request_body_t *dl_req = &DL_req->dl_tti_request_body;
     if (dl_req->nPDUs > NFAPI_NR_MAX_DL_TTI_PDUS - 2) {
       LOG_I(NR_MAC, "[RAPROC] Subframe %d: FAPI DL structure is full, skip scheduling UE %d\n", slotP, ra->rnti);
       return;
@@ -1769,15 +1779,15 @@ void nr_generate_Msg4(module_id_t module_idP, int CC_id, frame_t frameP, sub_fra
       T_INT(frameP), T_INT(slotP), T_INT(current_harq_pid), T_BUFFER(harq->transportBlock, harq->tb_size));
 
     // DL TX request
-    nfapi_nr_pdu_t *tx_req = &nr_mac->TX_req[CC_id].pdu_list[nr_mac->TX_req[CC_id].Number_of_PDUs];
+    nfapi_nr_pdu_t *tx_req = &TX_req->pdu_list[TX_req->Number_of_PDUs];
     memcpy(tx_req->TLVs[0].value.direct, harq->transportBlock, sizeof(uint8_t) * harq->tb_size);
     tx_req->PDU_length =  harq->tb_size;
     tx_req->PDU_index = pduindex;
     tx_req->num_TLV = 1;
     tx_req->TLVs[0].length =  harq->tb_size + 2;
-    nr_mac->TX_req[CC_id].SFN = frameP;
-    nr_mac->TX_req[CC_id].Number_of_PDUs++;
-    nr_mac->TX_req[CC_id].Slot = slotP;
+    TX_req->SFN = frameP;
+    TX_req->Number_of_PDUs++;
+    TX_req->Slot = slotP;
 
     // Mark the corresponding symbols and RBs as used
     fill_pdcch_vrb_map(nr_mac,

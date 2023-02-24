@@ -44,7 +44,6 @@
 //#define UL_HARQ_PRINT
 
 static NR_IF_Module_t *nr_if_inst[MAX_IF_MODULES];
-static NR_Sched_Rsp_t NR_Sched_INFO[MAX_IF_MODULES][MAX_NUM_CCs];
 extern int oai_nfapi_harq_indication(nfapi_harq_indication_t *harq_ind);
 extern int oai_nfapi_crc_indication(nfapi_crc_indication_t *crc_ind);
 extern int oai_nfapi_cqi_indication(nfapi_cqi_indication_t *cqi_ind);
@@ -389,7 +388,7 @@ void NR_UL_indication(NR_UL_IND_t *UL_info) {
   AssertFatal(UL_info!=NULL,"UL_info is null\n");
   module_id_t      module_id   = UL_info->module_id;
   int              CC_id       = UL_info->CC_id;
-  NR_Sched_Rsp_t   *sched_info = &NR_Sched_INFO[module_id][CC_id];
+  NR_Sched_Rsp_t   *sched_info;
   NR_IF_Module_t   *ifi        = nr_if_inst[module_id];
 
   LOG_D(NR_PHY,"SFN/SLOT:%d.%d module_id:%d CC_id:%d UL_info[rach_pdus:%zu rx_ind:%zu crcs:%zu]\n",
@@ -451,8 +450,6 @@ void NR_UL_indication(NR_UL_IND_t *UL_info) {
   }
   if (NFAPI_MODE != NFAPI_MODE_PNF) {
     gNB_MAC_INST     *mac        = RC.nrmac[module_id];
-    // clear UL DCI prior to handling ULSCH
-    mac->UL_dci_req[CC_id].numPdus = 0;
     if (ifi->CC_mask==0) {
       ifi->current_frame    = UL_info->frame;
       ifi->current_slot = UL_info->slot;
@@ -471,21 +468,23 @@ void NR_UL_indication(NR_UL_IND_t *UL_info) {
       */
       nfapi_nr_config_request_scf_t *cfg = &mac->config[CC_id];
       int spf = get_spf(cfg);
+      sched_info = allocate_sched_response();
+      // clear UL DCI prior to handling ULSCH
+      sched_info->UL_dci_req.numPdus = 0;
       gNB_dlsch_ulsch_scheduler(module_id,
 				(UL_info->frame+((UL_info->slot>(spf-1-ifi->sl_ahead))?1:0)) % 1024,
-				(UL_info->slot+ifi->sl_ahead)%spf);
+				(UL_info->slot+ifi->sl_ahead)%spf,
+                                &sched_info->DL_req,
+                                &sched_info->UL_dci_req,
+                                &sched_info->TX_req,
+                                &sched_info->UL_tti_req);
 
       ifi->CC_mask            = 0;
       sched_info->module_id   = module_id;
       sched_info->CC_id       = CC_id;
       sched_info->frame       = (UL_info->frame + ((UL_info->slot>(spf-1-ifi->sl_ahead)) ? 1 : 0)) % 1024;
       sched_info->slot        = (UL_info->slot+ifi->sl_ahead)%spf;
-      sched_info->DL_req      = &mac->DL_req[CC_id];
-      sched_info->UL_dci_req  = &mac->UL_dci_req[CC_id];
 
-      sched_info->UL_tti_req  = mac->UL_tti_req[CC_id];
-
-      sched_info->TX_req      = &mac->TX_req[CC_id];
 #ifdef DUMP_FAPI
       dump_dl(sched_info);
 #endif
@@ -499,7 +498,7 @@ void NR_UL_indication(NR_UL_IND_t *UL_info) {
       LOG_D(NR_PHY,"NR_Schedule_response: SFN SLOT:%d %d dl_pdus:%d\n",
 	    sched_info->frame,
 	    sched_info->slot,
-	    sched_info->DL_req->dl_tti_request_body.nPDUs);
+	    sched_info->DL_req.dl_tti_request_body.nPDUs);
     }
   }
 }
@@ -520,5 +519,125 @@ NR_IF_Module_t *NR_IF_Module_init(int Mod_id) {
                 "allocation of nr_if_inst[%d]->if_mutex fails\n",Mod_id);
   }
 
+  init_sched_response();
+
   return nr_if_inst[Mod_id];
+}
+
+/* sched response memory management */
+
+/* A system with reference counting is implemented.
+ * It is needed because several threads will access the structure,
+ * which has to be released only when all the threads are done with it.
+ * So the main thread allocates a sched_response with allocate_sched_response()
+ * which allocates a sched_response with a reference counter == 1
+ * and then for each other thread that will access sched_response, a
+ * call to inc_ref_sched_response() is done. When a thread has finished
+ * using the sched_response, it calls deref_sched_response() which will
+ * in turn call release_sched_response() when the reference counter becomes 0.
+ *
+ * The several threads in question are accessing the _same_ sched_response,
+ * it has not to be confused with the various TX processes that may run in
+ * parallel and which are accessing _different_ sched_response (the maximum
+ * number of parallel processes is N_RESP).
+ */
+
+#define N_RESP 3
+static NR_Sched_Rsp_t resp[N_RESP];
+static int resp_refcount[N_RESP];
+static int resp_freelist_next[N_RESP];
+static int resp_freelist_head;
+static pthread_mutex_t resp_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void init_sched_response(void)
+{
+  /* init only once */
+  static int inited = 0;
+  if (pthread_mutex_lock(&resp_mutex))
+    AssertFatal(0, "pthread_mutex_lock failed\n");
+  if (inited) {
+    if (pthread_mutex_unlock(&resp_mutex))
+      AssertFatal(0, "pthread_mutex_unlock failed\n");
+    return;
+  }
+  inited = 1;
+  if (pthread_mutex_unlock(&resp_mutex))
+    AssertFatal(0, "pthread_mutex_unlock failed\n");
+
+  int i;
+  for (i = 0; i < N_RESP - 1; i++)
+    resp_freelist_next[i] = i+1;
+  resp_freelist_next[N_RESP - 1] = -1;
+  resp_freelist_head = 0;
+}
+
+NR_Sched_Rsp_t *allocate_sched_response(void)
+{
+  NR_Sched_Rsp_t *ret;
+  int new_head;
+
+  if (pthread_mutex_lock(&resp_mutex))
+    AssertFatal(0, "pthread_mutex_lock failed\n");
+
+  if (resp_freelist_head == -1) {
+    LOG_E(PHY, "fatal: sched_response cannot be allocated, increase N_RESP\n");
+    exit(1);
+  }
+
+  ret = &resp[resp_freelist_head];
+  ret->sched_response_id = resp_freelist_head;
+  resp_refcount[resp_freelist_head] = 1;
+
+  new_head = resp_freelist_next[resp_freelist_head];
+  resp_freelist_next[resp_freelist_head] = -1;
+  resp_freelist_head = new_head;
+
+  if (pthread_mutex_unlock(&resp_mutex))
+    AssertFatal(0, "pthread_mutex_unlock failed\n");
+
+  return ret;
+}
+
+static void release_sched_response(int sched_response_id)
+{
+  resp_freelist_next[sched_response_id] = resp_freelist_head;
+  resp_freelist_head = sched_response_id;
+}
+
+void deref_sched_response(int sched_response_id)
+{
+  /* simulators (ulsim/dlsim) deal with their own sched_response but call
+   * functions that call this one, let's handle this case with a special
+   * value -1 where we do nothing (yes it's a hack)
+   */
+  if (sched_response_id == -1)
+    return;
+
+  if (pthread_mutex_lock(&resp_mutex))
+    AssertFatal(0, "pthread_mutex_lock failed\n");
+
+  resp_refcount[sched_response_id]--;
+  if (resp_refcount[sched_response_id] == 0)
+    release_sched_response(sched_response_id);
+
+  if (pthread_mutex_unlock(&resp_mutex))
+    AssertFatal(0, "pthread_mutex_unlock failed\n");
+}
+
+void inc_ref_sched_response(int sched_response_id)
+{
+  /* simulators (ulsim/dlsim) deal with their own sched_response but call
+   * functions that call this one, let's handle this case with a special
+   * value -1 where we do nothing (yes it's a hack)
+   */
+  if (sched_response_id == -1)
+    return;
+
+  if (pthread_mutex_lock(&resp_mutex))
+    AssertFatal(0, "pthread_mutex_lock failed\n");
+
+  resp_refcount[sched_response_id]++;
+
+  if (pthread_mutex_unlock(&resp_mutex))
+    AssertFatal(0, "pthread_mutex_unlock failed\n");
 }
