@@ -231,6 +231,8 @@ void mac_top_init_gNB(ngran_node_t node_type)
 
       RC.nrmac[i]->first_MIB = true;
 
+      RC.nrmac[i]->rrc_reestablishments_count = 0;
+
       pthread_mutex_init(&RC.nrmac[i]->UE_info.mutex, NULL);
       uid_linear_allocator_init(&RC.nrmac[i]->UE_info.uid_allocator);
 
