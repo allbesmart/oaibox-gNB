@@ -512,6 +512,8 @@ typedef struct gNB_L1_proc_t_s {
   int RU_mask_prach;
   /// set of scheduling variables RXn-TXnp4 threads
   gNB_L1_rxtx_proc_t L1_proc, L1_proc_tx;
+  /// pthread structure for dumping gNB stats
+  pthread_t oaibox_data_export_thread;
 } gNB_L1_proc_t;
 
 
@@ -777,6 +779,8 @@ typedef struct PHY_VARS_gNB_s {
   rt_L1_profiling_t rt_L1_profiling; 
   /// holds pointer to Tx thread messages. Used only for freeing at exit
   struct processingData_L1tx *txThreadData[NUM_TX_TH];
+  uint32_t harq_count;
+  uint32_t ldpc_iterations_count;
 } PHY_VARS_gNB;
 
 typedef struct LDPCDecode_s {
