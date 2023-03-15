@@ -738,21 +738,17 @@ int main( int argc, char **argv ) {
   oai_exit=1;
   printf("oai_exit=%d\n",oai_exit);
 
+  if (RC.nb_RU > 0)
+    stop_RU(RC.nb_RU);
+
   // cleanup
   if (RC.nb_nr_L1_inst > 0)
     stop_gNB(RC.nb_nr_L1_inst);
-
-  if (RC.nb_RU > 0)
-    stop_RU(RC.nb_RU);
 
   /* release memory used by the RU/gNB threads (incomplete), after all
    * threads have been stopped (they partially use the same memory) */
   for (int inst = 0; inst < RC.nb_RU; inst++) {
     nr_phy_free_RU(RC.ru[inst]);
-  }
-
-  for (int inst = 0; inst < RC.nb_nr_L1_inst; inst++) {
-    phy_free_nr_gNB(RC.gNB[inst]);
   }
 
   pthread_cond_destroy(&sync_cond);

@@ -195,7 +195,7 @@ int nfapi_nr_vnf_p7_start(nfapi_vnf_p7_config_t* config)
 				gNB->UL_INFO.CC_id     = gNB->CC_id;
 				NFAPI_TRACE(NFAPI_TRACE_DEBUG, "Calling NR_UL_indication for gNB->UL_INFO.frame = %d and slot %d\n",
 					    gNB->UL_INFO.frame, gNB->UL_INFO.slot);
-				gNB->if_inst->NR_UL_indication(&gNB->UL_INFO);
+				gNB->if_inst->NR_UL_indication(&gNB->UL_INFO, NULL, NULL);
 				prev_slot = gNB->UL_INFO.slot;
 			}
 			pthread_mutex_unlock(&gNB->UL_INFO_mutex);

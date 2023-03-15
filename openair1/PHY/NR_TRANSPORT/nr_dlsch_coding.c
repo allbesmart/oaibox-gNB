@@ -49,11 +49,9 @@
 //#define DEBUG_DLSCH_FREE 1
 
 
-void free_gNB_dlsch(NR_gNB_DLSCH_t **dlschptr, 
+void free_gNB_dlsch(NR_gNB_DLSCH_t *dlsch,
                     uint16_t N_RB,
                     const NR_DL_FRAME_PARMS* frame_parms) {
-
-  NR_gNB_DLSCH_t *dlsch = *dlschptr;
 
   int max_layers = (frame_parms->nb_antennas_tx<NR_MAX_NB_LAYERS) ? frame_parms->nb_antennas_tx : NR_MAX_NB_LAYERS;
   uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER*max_layers;
@@ -77,7 +75,7 @@ void free_gNB_dlsch(NR_gNB_DLSCH_t **dlschptr,
     harq->c[r] = NULL;
   }
   free(harq->c);
-  free(harq->pdu);
+  harq->pdu = NULL;
 
   int nb_codewords = NR_MAX_NB_LAYERS > 4 ? 2 : 1;
   for (int q=0; q<nb_codewords; q++)
@@ -94,7 +92,6 @@ void free_gNB_dlsch(NR_gNB_DLSCH_t **dlschptr,
   free(dlsch->ue_spec_bf_weights);
 
   free(dlsch);
-  *dlschptr = NULL;
 }
 
 NR_gNB_DLSCH_t *new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms,
@@ -141,10 +138,7 @@ NR_gNB_DLSCH_t *new_gNB_dlsch(NR_DL_FRAME_PARMS *frame_parms,
   bzero(harq, sizeof(NR_DL_gNB_HARQ_t));
   harq->b = malloc16(dlsch_bytes);
   AssertFatal(harq->b, "cannot allocate memory for harq->b\n");
-  harq->pdu = malloc16(dlsch_bytes);
-  AssertFatal(harq->pdu, "cannot allocate memory for harq->pdu\n");
-  bzero(harq->pdu, dlsch_bytes);
-  nr_emulate_dlsch_payload(harq->pdu, (dlsch_bytes) >> 3);
+  harq->pdu = NULL;
   bzero(harq->b, dlsch_bytes);
 
   harq->c = (uint8_t **)malloc16(a_segments*sizeof(uint8_t *));

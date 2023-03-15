@@ -107,10 +107,14 @@ typedef struct {
   nfapi_nr_config_request_scf_t *cfg;
 } NR_PHY_Config_t;
 
+struct processingData_L1tx;
+
 typedef struct NR_IF_Module_s {
   //define the function pointer
-  void (*NR_UL_indication)(NR_UL_IND_t *UL_INFO);
-  void (*NR_Schedule_response)(NR_Sched_Rsp_t *Sched_INFO);
+  void (*NR_UL_indication)(NR_UL_IND_t *UL_INFO,
+                           uint32_t *fapi_pdu_list[NFAPI_CC_MAX][NFAPI_NR_MAX_TX_REQUEST_PDUS][NFAPI_NR_MAX_TX_REQUEST_TLV],
+                           struct processingData_L1tx *phyMsg);
+  void (*NR_Schedule_response)(NR_Sched_Rsp_t *Sched_INFO, struct processingData_L1tx *phyMsg);
   void (*NR_PHY_config_req)(NR_PHY_Config_t *config_INFO);
   uint32_t CC_mask;
   uint16_t current_frame;
@@ -124,11 +128,13 @@ NR_IF_Module_t *NR_IF_Module_init(int Mod_id);
 
 void NR_IF_Module_kill(int Mod_id);
 
-void NR_UL_indication(NR_UL_IND_t *UL_INFO);
+void NR_UL_indication(NR_UL_IND_t *UL_INFO,
+                      uint32_t *fapi_pdu_list[NFAPI_CC_MAX][NFAPI_NR_MAX_TX_REQUEST_PDUS][NFAPI_NR_MAX_TX_REQUEST_TLV],
+                      struct processingData_L1tx *phyMsg);
 
 void RCconfig_nr_ue_macrlc(void);
 
 /*Interface for Downlink, transmitting the DLSCH SDU, DCI SDU*/
-void NR_Schedule_Response(NR_Sched_Rsp_t *Sched_INFO);
+void NR_Schedule_Response(NR_Sched_Rsp_t *Sched_INFO, struct processingData_L1tx *phyMsg);
 
 #endif /*_NFAPI_INTERFACE_NR_H_*/

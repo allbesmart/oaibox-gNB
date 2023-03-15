@@ -861,6 +861,36 @@ void phy_free_nr_gNB(PHY_VARS_gNB *gNB)
     free_and_zero(pusch_vars[ULSCH_id]->llr);
     free_and_zero(pusch_vars[ULSCH_id]);
   } //ULSCH_id
+
+  for (int i=0; i < NUM_TX_TH; i++) {
+    if (gNB->txThreadData[i]) {
+      reset_DLSCH_struct(gNB, gNB->txThreadData[i]);
+      free_phy_fapi_pdus(gNB->txThreadData[i]->fapi_pdu_list);
+    }
+  }
+}
+
+void init_phy_fapi_pdus(uint32_t *pdu_list[NFAPI_CC_MAX][NFAPI_NR_MAX_TX_REQUEST_PDUS][NFAPI_NR_MAX_TX_REQUEST_TLV]) {
+  const int pdu_len = sizeof(uint32_t)*38016 + 4; /* size of one FAPI PDU + CRC bytes */
+  for (int cc=0; cc < NFAPI_CC_MAX; cc++) {
+    for (int pdu=0; pdu < NFAPI_NR_MAX_TX_REQUEST_PDUS; pdu++) {
+      for (int tlv=0; tlv < NFAPI_NR_MAX_TX_REQUEST_TLV; tlv++) {
+        pdu_list[cc][pdu][tlv] = malloc16(pdu_len);
+        bzero(pdu_list[cc][pdu][tlv], pdu_len);
+      }
+    }
+  }
+}
+
+void free_phy_fapi_pdus(uint32_t *pdu_list[NFAPI_CC_MAX][NFAPI_NR_MAX_TX_REQUEST_PDUS][NFAPI_NR_MAX_TX_REQUEST_TLV]) {
+  for (int cc=0; cc < NFAPI_CC_MAX; cc++) {
+    for (int pdu=0; pdu < NFAPI_NR_MAX_TX_REQUEST_PDUS; pdu++) {
+      for (int tlv=0; tlv < NFAPI_NR_MAX_TX_REQUEST_TLV; tlv++) {
+        if (pdu_list[cc][pdu][tlv])
+          free(pdu_list[cc][pdu][tlv]);
+      }
+    }
+  }
 }
 
 //Adding nr_schedule_handler
@@ -1017,7 +1047,7 @@ void reset_DLSCH_struct(const PHY_VARS_gNB *gNB, processingData_L1tx_t *msg)
   int num_cw = NR_MAX_NB_LAYERS > 4? 2:1;
   for (int i = 0; i < NUMBER_OF_NR_DLSCH_MAX; i++)
     for (int j=0; j<num_cw; j++)
-      free_gNB_dlsch(&msg->dlsch[i][j], grid_size, fp);
+      free_gNB_dlsch(msg->dlsch[i][j], grid_size, fp);
 }
 
 void init_nr_transport(PHY_VARS_gNB *gNB)

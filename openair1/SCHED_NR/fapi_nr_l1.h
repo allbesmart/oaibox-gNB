@@ -40,7 +40,7 @@ void handle_nr_nfapi_ssb_pdu(processingData_L1tx_t *msgTx,
 						int frame,int slot,
 						nfapi_nr_dl_tti_request_pdu_t *dl_tti_pdu);
 
-void nr_schedule_response(NR_Sched_Rsp_t *Sched_INFO);
+void nr_schedule_response(NR_Sched_Rsp_t *Sched_INFO, processingData_L1tx_t *phyMsg);
 
 void handle_nfapi_nr_csirs_pdu(processingData_L1tx_t *msgTx,
 			       int frame, int slot,

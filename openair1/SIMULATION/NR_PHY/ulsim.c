@@ -1118,7 +1118,7 @@ int main(int argc, char **argv)
 
         // prepare ULSCH/PUSCH reception
         pushNotifiedFIFO(&gNB->L1_tx_free, msgL1Tx); // to unblock the process in the beginning
-        nr_schedule_response(Sched_INFO);
+        nr_schedule_response(Sched_INFO, (void *)msgDataTx);
 
         // --------- setting parameters for UE --------
 

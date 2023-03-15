@@ -46,6 +46,7 @@
 
 #define MAX_NUM_RU_PER_gNB 8
 #define MAX_PUCCH0_NID 8
+#define NUM_TX_TH 2
 
 typedef struct {
   int nb_id;
@@ -774,6 +775,8 @@ typedef struct PHY_VARS_gNB_s {
   void *scopeData;
   /// structure for analyzing high-level RT measurements
   rt_L1_profiling_t rt_L1_profiling; 
+  /// holds pointer to Tx thread messages. Used only for freeing at exit
+  struct processingData_L1tx *txThreadData[NUM_TX_TH];
 } PHY_VARS_gNB;
 
 typedef struct LDPCDecode_s {
@@ -839,6 +842,7 @@ typedef struct processingData_L1tx {
   uint16_t num_pdsch_slot;
   int num_dl_pdcch;
   int num_ul_pdcch;
+  uint32_t *fapi_pdu_list[NFAPI_CC_MAX][NFAPI_NR_MAX_TX_REQUEST_PDUS][NFAPI_NR_MAX_TX_REQUEST_TLV];
 } processingData_L1tx_t;
 
 #endif

@@ -1332,7 +1332,11 @@ void nr_schedule_ue_spec(module_id_t module_id,
     tx_req->PDU_index  = pduindex;
     tx_req->num_TLV = 1;
     tx_req->TLVs[0].length = TBS + 2;
-    memcpy(tx_req->TLVs[0].value.direct, harq->transportBlock, TBS);
+    if (tx_req->TLVs[0].tag) {
+      memcpy(tx_req->TLVs[0].value.ptr, harq->transportBlock, TBS);
+    } else {
+      memcpy(tx_req->TLVs[0].value.direct, harq->transportBlock, TBS);
+    }
     gNB_mac->TX_req[CC_id].Number_of_PDUs++;
     gNB_mac->TX_req[CC_id].SFN = frame;
     gNB_mac->TX_req[CC_id].Slot = slot;

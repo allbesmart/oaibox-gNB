@@ -478,6 +478,16 @@ int main(int argc, char **argv)
   dlsch0_ue->dlsch_config.tbslbrm = Tbslbrm;
 	printf("harq process ue mcs = %d Qm = %d, symb %d\n", dlsch0_ue->dlsch_config.mcs, dlsch0_ue->dlsch_config.qamModOrder, nb_symb_sch);
 
+  int max_layers = (frame_parms->nb_antennas_tx<NR_MAX_NB_LAYERS) ? frame_parms->nb_antennas_tx : NR_MAX_NB_LAYERS;
+  uint16_t a_segments = MAX_NUM_NR_DLSCH_SEGMENTS_PER_LAYER*max_layers;  //number of segments to be allocated
+
+  if (nb_rb != 273) {
+    a_segments = a_segments*nb_rb;
+    a_segments = a_segments/273 +1;
+  }
+
+  const int dlsch_bytes = a_segments*1056;  // allocated bytes per segment
+  dlsch->harq_process.pdu = malloc16(dlsch_bytes);
 	unsigned char *test_input=dlsch->harq_process.pdu;
 	//unsigned char test_input[TBS / 8]  __attribute__ ((aligned(16)));
 	for (i = 0; i < TBS / 8; i++)
@@ -624,6 +634,7 @@ int main(int argc, char **argv)
     free(gNB->gNB_config.tdd_table.max_tdd_periodicity_list[i].max_num_of_symbol_per_slot_list);
   free(gNB->gNB_config.tdd_table.max_tdd_periodicity_list);
 
+  free(test_input);
   phy_free_nr_gNB(gNB);
   free(RC.gNB[0]);
   free(RC.gNB);

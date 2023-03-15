@@ -596,7 +596,11 @@ void schedule_nr_sib1(module_id_t module_idP, frame_t frameP, sub_frame_t slotP)
       nfapi_nr_pdu_t *tx_req = &gNB_mac->TX_req[CC_id].pdu_list[ntx_req];
 
       // Data to be transmitted
-      memcpy(tx_req->TLVs[0].value.direct, sib1_payload, TBS);
+      if (tx_req->TLVs[0].tag) {
+        memcpy(tx_req->TLVs[0].value.ptr, sib1_payload, TBS);
+      } else {
+        memcpy(tx_req->TLVs[0].value.direct, sib1_payload, TBS);
+      }
 
       tx_req->PDU_length = TBS;
       tx_req->PDU_index  = pdu_index;

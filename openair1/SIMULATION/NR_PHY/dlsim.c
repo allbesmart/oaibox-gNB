@@ -990,7 +990,7 @@ int main(int argc, char **argv)
         Sched_INFO.UL_dci_req  = NULL;
         Sched_INFO.TX_req    = &gNB_mac->TX_req[0];
         pushNotifiedFIFO(&gNB->L1_tx_free,msgL1Tx);
-        nr_schedule_response(&Sched_INFO);
+        nr_schedule_response(&Sched_INFO, (void *)msgDataTx);
 
         /* PTRS values for DLSIM calculations   */
         nfapi_nr_dl_tti_request_body_t *dl_req = &gNB_mac->DL_req[Sched_INFO.CC_id].dl_tti_request_body;

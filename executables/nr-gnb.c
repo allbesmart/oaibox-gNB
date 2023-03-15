@@ -232,7 +232,7 @@ void rx_func(void *param) {
   }
 
   stop_meas( &softmodem_stats_rxtx_sf );
-  LOG_D(PHY,"%s() Exit proc[rx:%d%d tx:%d%d]\n", __FUNCTION__, frame_rx, slot_rx, frame_tx, slot_tx);
+  LOG_D(PHY,"%s() Exit proc[rx:%d,%d tx:%d,%d]\n", __FUNCTION__, frame_rx, slot_rx, frame_tx, slot_tx);
   clock_gettime(CLOCK_MONOTONIC,&info->gNB->rt_L1_profiling.return_L1_RX[rt_prof_idx]);
 
   // Call the scheduler
@@ -242,11 +242,27 @@ void rx_func(void *param) {
   gNB->UL_INFO.slot      = slot_rx;
   gNB->UL_INFO.module_id = gNB->Mod_id;
   gNB->UL_INFO.CC_id     = gNB->CC_id;
-  gNB->if_inst->NR_UL_indication(&gNB->UL_INFO);
+  int tx_slot_type = nr_slot_select(cfg,frame_rx,slot_tx);
+  if (NFAPI_MODE != NFAPI_MODE_PNF) {
+    if (tx_slot_type == NR_DOWNLINK_SLOT || tx_slot_type == NR_MIXED_SLOT) {
+    // Pull PHY msg and send to MAC
+    notifiedFIFO_elt_t *res;
+    res = pullTpool(&gNB->L1_tx_free, &gNB->threadPool);
+    DevAssert(res != NULL);
+    const time_stats_t ts = exec_time_stats_NotifiedFIFO(res);
+    merge_meas(&gNB->phy_proc_tx, &ts);
+    processingData_L1tx_t *msgTx = (processingData_L1tx_t *) NotifiedFifoData(res);
+
+    gNB->if_inst->NR_UL_indication(&gNB->UL_INFO, msgTx->fapi_pdu_list, msgTx);
+    // MAC has filled PHY msg (msgTx)
+    pushNotifiedFIFO(&gNB->L1_tx_filled,res);
+    } else if (tx_slot_type == NR_UPLINK_SLOT) {
+      gNB->if_inst->NR_UL_indication(&gNB->UL_INFO, NULL, NULL);
+    } else { AssertFatal(false, "Unknown slot type\n");}
+  }
   pthread_mutex_unlock(&gNB->UL_INFO_mutex);
   stop_meas(&gNB->ul_indication_stats);
 
-  int tx_slot_type = nr_slot_select(cfg,frame_rx,slot_tx);
   if ((tx_slot_type == NR_DOWNLINK_SLOT || tx_slot_type == NR_MIXED_SLOT) && NFAPI_MODE != NFAPI_MODE_PNF) {
     notifiedFIFO_elt_t *res;
     processingData_L1tx_t *syncMsg;
@@ -433,13 +449,13 @@ void *tx_reorder_thread(void* param) {
   return(NULL);
 }
 
-void init_gNB_Tpool(int inst) {
+void init_gNB_Tpool_msgs(int inst) {
   PHY_VARS_gNB *gNB;
   gNB = RC.gNB[inst];
   gNB_L1_proc_t *proc = &gNB->proc;
 
-  // ULSCH decoding threadpool
   initTpool(get_softmodem_params()->threadPoolConfig, &gNB->threadPool, cpumeas(CPUMEAS_GETSTATE));
+
   // ULSCH decoder result FIFO
   initNotifiedFIFO(&gNB->respDecode);
 
@@ -453,14 +469,16 @@ void init_gNB_Tpool(int inst) {
   initNotifiedFIFO(&gNB->L1_tx_filled);
   initNotifiedFIFO(&gNB->L1_tx_out);
   
-  // we create 2 threads for L1 tx processing
-  for (int i=0; i < 2; i++) {
+  // we create NUM_TX_TH threads for L1 tx processing
+  for (int i=0; i < NUM_TX_TH; i++) {
     notifiedFIFO_elt_t *msgL1Tx = newNotifiedFIFO_elt(sizeof(processingData_L1tx_t), 0, &gNB->L1_tx_out, tx_func);
     processingData_L1tx_t *msgDataTx = (processingData_L1tx_t *)NotifiedFifoData(msgL1Tx);
     memset(msgDataTx, 0, sizeof(processingData_L1tx_t));
     init_DLSCH_struct(gNB, msgDataTx);
     memset(msgDataTx->ssb, 0, 64*sizeof(NR_gNB_SSB_t));
+    init_phy_fapi_pdus(msgDataTx->fapi_pdu_list);
     pushNotifiedFIFO(&gNB->L1_tx_free, msgL1Tx); // to unblock the process in the beginning
+    gNB->txThreadData[i] = msgDataTx;
   }
 
   if ((!get_softmodem_params()->emulate_l1) && (!IS_SOFTMODEM_NOSTATS_BIT) && (NFAPI_MODE!=NFAPI_MODE_VNF))
@@ -476,6 +494,7 @@ void init_gNB_Tpool(int inst) {
 void term_gNB_Tpool(int inst) {
   PHY_VARS_gNB *gNB = RC.gNB[inst];
   abortTpool(&gNB->threadPool);
+  phy_free_nr_gNB(gNB);
   abortNotifiedFIFO(&gNB->respDecode);
   abortNotifiedFIFO(&gNB->resp_L1);
   abortNotifiedFIFO(&gNB->L1_tx_free);
@@ -567,7 +586,7 @@ void init_eNB_afterRU(void) {
      * (not tested in other modes).
      */
     //init_precoding_weights(RC.gNB[inst]);
-    init_gNB_Tpool(inst);
+    init_gNB_Tpool_msgs(inst);
   }
 
 }

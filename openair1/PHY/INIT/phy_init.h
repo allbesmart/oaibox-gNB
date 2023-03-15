@@ -390,5 +390,4 @@ void phy_config_update_sib13_request(PHY_Config_t *phy_config);
 int init_frame_parms(LTE_DL_FRAME_PARMS *frame_parms,uint8_t osf);
 void dump_frame_parms(LTE_DL_FRAME_PARMS *frame_parms);
 void fill_subframe_mask(PHY_VARS_eNB *eNB);
-
 #endif
