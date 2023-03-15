@@ -102,9 +102,11 @@ __attribute__((always_inline)) inline c16_t c32x16cumulVectVectWithSteps(c16_t *
 
 int get_delay_idx(int delay) {
   int delay_idx = MAX_UL_DELAY_COMP + delay;
+  // If the measured delay is less than -MAX_UL_DELAY_COMP, a -MAX_UL_DELAY_COMP delay is compensated.
   if (delay_idx < 0) {
     delay_idx = 0;
   }
+  // If the measured delay is greater than +MAX_UL_DELAY_COMP, a +MAX_UL_DELAY_COMP delay is compensated.
   if (delay_idx > MAX_UL_DELAY_COMP<<1) {
     delay_idx = MAX_UL_DELAY_COMP<<1;
   }
@@ -118,7 +120,8 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
                                 int ul_id,
                                 unsigned short bwp_start_subcarrier,
                                 nfapi_nr_pusch_pdu_t *pusch_pdu,
-                                int *max_ch) {
+                                int *max_ch,
+                                uint32_t *nvar) {
 
   c16_t pilot[3280] __attribute__((aligned(16)));
   const int chest_freq = gNB->chest_freq;
@@ -183,6 +186,8 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
 
 #endif
 
+  int nest_count = 0;
+  uint64_t noise_amp2 = 0;
   c16_t ul_ls_est[symbolSize];
   memset(ul_ls_est, 0, sizeof(c16_t) * symbolSize);
   memset(&gNB->measurements.delay[ul_id], 0, sizeof(gNB->measurements.delay[ul_id]));
@@ -200,11 +205,12 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
 #endif
 
     if (pusch_pdu->dmrs_config_type == pusch_dmrs_type1 && chest_freq == 0) {
-      c16_t *pil   = pilot;
-      int re_offset = k0;
-      LOG_D(PHY,"PUSCH estimation DMRS type 1, Freq-domain interpolation");
+      LOG_D(PHY, "PUSCH estimation DMRS type 1, Freq-domain interpolation\n");
+
       // For configuration type 1: k = 4*n + 2*k' + delta,
       // where k' is 0 or 1, and delta is in Table 6.4.1.1.3-1 from TS 38.211
+      c16_t *pil = pilot;
+      int re_offset = k0;
       int pilot_cnt = 0;
       int delta = nr_pusch_dmrs_delta(pusch_dmrs_type1, p);
 
@@ -282,12 +288,16 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
           int k = pilot_cnt << 1;
           ul_ch[k] = c16mulShift(ul_ch[k], ul_inv_delay_table[k], 8);
           ul_ch[k + 1] = c16mulShift(ul_ch[k + 1], ul_inv_delay_table[k + 1], 8);
+          noise_amp2 += c16amp2(c16sub(ul_ls_est[k], ul_ch[k]));
+          noise_amp2 += c16amp2(c16sub(ul_ls_est[k + 1], ul_ch[k + 1]));
+
 #ifdef DEBUG_PUSCH
           re_offset = (k0 + (n << 2) + (k_line << 1)) % symbolSize;
           c16_t *rxF = &rxdataF[soffset + re_offset];
           printf("ch -> (%4d,%4d), ch_inter -> (%4d,%4d)\n", ul_ls_est[k].r, ul_ls_est[k].i, ul_ch[k].r, ul_ch[k].i);
 #endif
           pilot_cnt++;
+          nest_count += 2;
         }
       }
 
@@ -305,6 +315,8 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
         multadd_real_four_symbols_vector_complex_scalar(filt8_rep4, &ch, &ul_ls_est[n]);
         ul_ls_est[n + 4] = ch;
         ul_ls_est[n + 5] = ch;
+        noise_amp2 += c16amp2(c16sub(ch0, ch));
+        nest_count++;
       }
 
       // Delay compensation
@@ -499,7 +511,12 @@ int nr_pusch_channel_estimation(PHY_VARS_gNB *gNB,
 #ifdef DEBUG_CH
   fclose(debug_ch_est);
 #endif
-  return(0);
+
+  if (nvar && nest_count > 0) {
+    *nvar = (uint32_t)(noise_amp2 / nest_count);
+  }
+
+  return 0;
 }
 
 
