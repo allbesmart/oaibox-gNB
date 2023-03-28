@@ -683,7 +683,7 @@ void nr_schedule_RA(module_id_t module_idP, frame_t frameP, sub_frame_t slotP,
           nr_generate_Msg3_retransmission(module_idP, CC_id, frameP, slotP, ra, ul_dci_req);
           break;
         case Msg3_dcch_dtch:
-          nr_generate_Msg3_dcch_dtch_response(module_idP, CC_id, frameP, slotP, ra);
+          nr_generate_Msg3_dcch_dtch_response(module_idP, CC_id, frameP, slotP, ra, DL_req, TX_req);
         case Msg4:
           nr_generate_Msg4(module_idP, CC_id, frameP, slotP, ra, DL_req, TX_req);
           break;
@@ -1607,7 +1607,9 @@ void prepare_dl_pdus(gNB_MAC_INST *nr_mac,
     LOG_D(NR_MAC,"numDlDci: %i\n", pdcch_pdu_rel15->numDlDci);
 }
 
-void nr_generate_Msg3_dcch_dtch_response(module_id_t module_idP, int CC_id, frame_t frameP, sub_frame_t slotP, NR_RA_t *ra)
+void nr_generate_Msg3_dcch_dtch_response(module_id_t module_idP, int CC_id, frame_t frameP, sub_frame_t slotP, NR_RA_t *ra,
+                                         nfapi_nr_dl_tti_request_t *DL_req,
+                                         nfapi_nr_tx_data_request_t *TX_req)
 {
   gNB_MAC_INST *nr_mac = RC.nrmac[module_idP];
 
@@ -1661,7 +1663,7 @@ void nr_generate_Msg3_dcch_dtch_response(module_id_t module_idP, int CC_id, fram
   }
 
   // Checking if the DCI allocation is feasible in current subframe
-  nfapi_nr_dl_tti_request_body_t *dl_req = &nr_mac->DL_req[CC_id].dl_tti_request_body;
+  nfapi_nr_dl_tti_request_body_t *dl_req = &DL_req->dl_tti_request_body;
   if (dl_req->nPDUs > NFAPI_NR_MAX_DL_TTI_PDUS - 2) {
     LOG_I(NR_MAC, "[RAPROC] Subframe %d: FAPI DL structure is full, skip scheduling UE %d\n", slotP, rnti);
     return;
@@ -1741,15 +1743,15 @@ void nr_generate_Msg3_dcch_dtch_response(module_id_t module_idP, int CC_id, fram
                   0, time_domain_assignment, CC_id, rnti, 0, mcsIndex, tb_scaling, pduindex, rbStart, rbSize);
 
   // DL TX request
-  nfapi_nr_pdu_t *tx_req = &nr_mac->TX_req[CC_id].pdu_list[nr_mac->TX_req[CC_id].Number_of_PDUs];
+  nfapi_nr_pdu_t *tx_req = &TX_req->pdu_list[TX_req->Number_of_PDUs];
   memcpy(tx_req->TLVs[0].value.direct, buf, sizeof(uint8_t) * tb_size);
   tx_req->PDU_length =  tb_size;
   tx_req->PDU_index = pduindex;
   tx_req->num_TLV = 1;
   tx_req->TLVs[0].length =  tb_size + 2;
-  nr_mac->TX_req[CC_id].SFN = frameP;
-  nr_mac->TX_req[CC_id].Number_of_PDUs++;
-  nr_mac->TX_req[CC_id].Slot = slotP;
+  TX_req->SFN = frameP;
+  TX_req->Number_of_PDUs++;
+  TX_req->Slot = slotP;
 
   // Mark the corresponding symbols and RBs as used
   fill_pdcch_vrb_map(nr_mac,

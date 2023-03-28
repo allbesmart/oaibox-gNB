@@ -96,10 +96,6 @@ void clear_nr_nfapi_information(gNB_MAC_INST * gNB,
   future_ul_tti_req->n_ulcch = 0;
   future_ul_tti_req->n_group = 0;
 
-  /* UL_tti_req is a simple pointer into the current UL_tti_req_ahead, i.e.,
-   * it walks over UL_tti_req_ahead in a circular fashion */
-  const int current_index = ul_buffer_index(frameP, slotP, *scc->ssbSubcarrierSpacing, gNB->UL_tti_req_ahead_size);
-  gNB->UL_tti_req[CC_idP] = &gNB->UL_tti_req_ahead[CC_idP][current_index];
   TX_req[CC_idP].Number_of_PDUs = 0;
 }
 
@@ -258,11 +254,12 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
 
   nr_schedule_pucch(gNB, frame, slot);
 
-  /* TODO: we copy from gNB->UL_tti_req_ahead[0][slot], ie. CC_id == 0,
+  /* TODO: we copy from gNB->UL_tti_req_ahead[0][current_index], ie. CC_id == 0,
    * is more than 1 CC supported?
    */
   AssertFatal(MAX_NUM_CCs == 1, "only 1 CC supported\n");
-  copy_ul_tti_req(UL_tti_req,  &gNB->UL_tti_req_ahead[0][slot]);
+  const int current_index = ul_buffer_index(frame, slot, *scc->ssbSubcarrierSpacing, gNB->UL_tti_req_ahead_size);
+  copy_ul_tti_req(UL_tti_req,  &gNB->UL_tti_req_ahead[0][current_index]);
 
   stop_meas(&gNB->eNB_scheduler);
 
