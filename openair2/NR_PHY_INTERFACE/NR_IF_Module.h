@@ -133,10 +133,4 @@ void RCconfig_nr_ue_macrlc(void);
 /*Interface for Downlink, transmitting the DLSCH SDU, DCI SDU*/
 void NR_Schedule_Response(NR_Sched_Rsp_t *Sched_INFO);
 
-/* sched response memory management */
-void init_sched_response(void);
-NR_Sched_Rsp_t *allocate_sched_response(void);
-void deref_sched_response(int sched_response_id);
-void inc_ref_sched_response(int sched_response_id);
-
 #endif /*_NFAPI_INTERFACE_NR_H_*/
