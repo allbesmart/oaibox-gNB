@@ -169,7 +169,7 @@ void nr_schedule_response(NR_Sched_Rsp_t *Sched_INFO)
       msgTx->num_ul_pdcch = number_ul_dci_pdu;
       msgTx->slot = slot;
       msgTx->frame = frame;
-      /* store the sched_responsed_id for the TX thread to release it when done */
+      /* store the sched_response_id for the TX thread to release it when done */
       msgTx->sched_response_id = Sched_INFO->sched_response_id;
 
       for (int i=0;i<number_dl_pdu;i++) {
