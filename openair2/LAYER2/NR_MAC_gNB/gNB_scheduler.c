@@ -144,10 +144,7 @@ static void copy_ul_tti_req(nfapi_nr_ul_tti_request_t *to, nfapi_nr_ul_tti_reque
 void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
                                frame_t frame,
                                sub_frame_t slot,
-                               nfapi_nr_dl_tti_request_t *DL_req,
-                               nfapi_nr_ul_dci_request_t *UL_dci_req,
-                               nfapi_nr_tx_data_request_t *TX_req,
-                               nfapi_nr_ul_tti_request_t *UL_tti_req)
+                               NR_Sched_Rsp_t *sched_info)
 {
   protocol_ctxt_t ctxt = {0};
   PROTOCOL_CTXT_SET_BY_MODULE_ID(&ctxt, module_idP, ENB_FLAG_YES, NOT_A_RNTI, frame, slot,module_idP);
@@ -193,7 +190,7 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
     uint16_t *vrb_map_UL = cc[CC_id].vrb_map_UL;
     memcpy(&vrb_map_UL[prev_slot % size * MAX_BWP_SIZE], &gNB->ulprbbl, sizeof(uint16_t) * MAX_BWP_SIZE);
 
-    clear_nr_nfapi_information(gNB, CC_id, frame, slot, DL_req, TX_req, UL_dci_req);
+    clear_nr_nfapi_information(gNB, CC_id, frame, slot, &sched_info->DL_req, &sched_info->TX_req, &sched_info->UL_dci_req);
   }
 
   if ((slot == 0) && (frame & 127) == 0) {
@@ -207,11 +204,11 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
   schedule_nr_bwp_switch(module_idP, frame, slot);
 
   // This schedules MIB
-  schedule_nr_mib(module_idP, frame, slot, DL_req);
+  schedule_nr_mib(module_idP, frame, slot, &sched_info->DL_req);
 
   // This schedules SIB1
   if (get_softmodem_params()->sa == 1)
-    schedule_nr_sib1(module_idP, frame, slot, DL_req, TX_req);
+    schedule_nr_sib1(module_idP, frame, slot, &sched_info->DL_req, &sched_info->TX_req);
 
 
   // This schedule PRACH if we are not in phy_test mode
@@ -229,7 +226,7 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
   }
 
   // Schedule CSI-RS transmission
-  nr_csirs_scheduling(module_idP, frame, slot, nr_slots_per_frame[*scc->ssbSubcarrierSpacing], DL_req);
+  nr_csirs_scheduling(module_idP, frame, slot, nr_slots_per_frame[*scc->ssbSubcarrierSpacing], &sched_info->DL_req);
 
   // Schedule CSI measurement reporting
   nr_csi_meas_reporting(module_idP, frame, slot);
@@ -239,15 +236,15 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
   // This schedule RA procedure if not in phy_test mode
   // Otherwise consider 5G already connected
   if (get_softmodem_params()->phy_test == 0) {
-    nr_schedule_RA(module_idP, frame, slot, UL_dci_req, DL_req, TX_req);
+    nr_schedule_RA(module_idP, frame, slot, &sched_info->UL_dci_req, &sched_info->DL_req, &sched_info->TX_req);
   }
 
   // This schedules the DCI for Uplink and subsequently PUSCH
-  nr_schedule_ulsch(module_idP, frame, slot, UL_dci_req);
+  nr_schedule_ulsch(module_idP, frame, slot, &sched_info->UL_dci_req);
 
   // This schedules the DCI for Downlink and PDSCH
   start_meas(&gNB->schedule_dlsch);
-  nr_schedule_ue_spec(module_idP, frame, slot, DL_req, TX_req);
+  nr_schedule_ue_spec(module_idP, frame, slot, &sched_info->DL_req, &sched_info->TX_req);
   stop_meas(&gNB->schedule_dlsch);
 
   nr_sr_reporting(gNB, frame, slot);
@@ -259,7 +256,7 @@ void gNB_dlsch_ulsch_scheduler(module_id_t module_idP,
    */
   AssertFatal(MAX_NUM_CCs == 1, "only 1 CC supported\n");
   const int current_index = ul_buffer_index(frame, slot, *scc->ssbSubcarrierSpacing, gNB->UL_tti_req_ahead_size);
-  copy_ul_tti_req(UL_tti_req, &gNB->UL_tti_req_ahead[0][current_index]);
+  copy_ul_tti_req(&sched_info->UL_tti_req, &gNB->UL_tti_req_ahead[0][current_index]);
 
   stop_meas(&gNB->eNB_scheduler);
 

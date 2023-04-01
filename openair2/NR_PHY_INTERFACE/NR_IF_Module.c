@@ -474,10 +474,7 @@ void NR_UL_indication(NR_UL_IND_t *UL_info) {
       gNB_dlsch_ulsch_scheduler(module_id,
 				(UL_info->frame+((UL_info->slot>(spf-1-ifi->sl_ahead))?1:0)) % 1024,
 				(UL_info->slot+ifi->sl_ahead)%spf,
-                                &sched_info->DL_req,
-                                &sched_info->UL_dci_req,
-                                &sched_info->TX_req,
-                                &sched_info->UL_tti_req);
+                                sched_info);
 
       ifi->CC_mask            = 0;
       sched_info->module_id   = module_id;
