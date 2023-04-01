@@ -994,7 +994,7 @@ int main(int argc, char **argv)
       round = 0;
       UE_harq_process->DLround = round;
       UE_harq_process->first_rx = 1;
-        
+
       Sched_INFO = malloc(sizeof(*Sched_INFO));
       if (Sched_INFO == NULL) {
         LOG_E(PHY, "out of memory\n");
@@ -1006,19 +1006,16 @@ int main(int argc, char **argv)
       while ((round<num_rounds) && (UE_harq_process->ack==0)) {
         round_trials[round]++;
 
-        clear_nr_nfapi_information(RC.nrmac[0], 0, frame, slot,
-                                   &Sched_INFO->DL_req,
-                                   &Sched_INFO->TX_req,
-                                   &Sched_INFO->UL_dci_req);
+        clear_nr_nfapi_information(RC.nrmac[0], 0, frame, slot, &Sched_INFO->DL_req, &Sched_INFO->TX_req, &Sched_INFO->UL_dci_req);
         UE_info->UE_sched_ctrl.harq_processes[harq_pid].ndi = !(trial&1);
         UE_info->UE_sched_ctrl.harq_processes[harq_pid].round = round;
 
         nr_schedule_ue_spec(0, frame, slot, &Sched_INFO->DL_req, &Sched_INFO->TX_req);
         Sched_INFO->module_id = 0;
-        Sched_INFO->CC_id     = 0;
-        Sched_INFO->frame     = frame;
-        Sched_INFO->slot      = slot;
-        Sched_INFO->UL_dci_req.numPdus  = 0;
+        Sched_INFO->CC_id = 0;
+        Sched_INFO->frame = frame;
+        Sched_INFO->slot = slot;
+        Sched_INFO->UL_dci_req.numPdus = 0;
         pushNotifiedFIFO(&gNB->L1_tx_free,msgL1Tx);
         nr_schedule_response(Sched_INFO);
 

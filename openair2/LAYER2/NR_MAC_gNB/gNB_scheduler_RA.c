@@ -698,10 +698,12 @@ void nr_schedule_RA(module_id_t module_idP, frame_t frameP, sub_frame_t slotP,
   stop_meas(&mac->schedule_ra);
 }
 
-
 void nr_generate_Msg3_retransmission(module_id_t module_idP,
-        int CC_id, frame_t frame, sub_frame_t slot, NR_RA_t *ra,
-        nfapi_nr_ul_dci_request_t *ul_dci_req)
+                                     int CC_id,
+                                     frame_t frame,
+                                     sub_frame_t slot,
+                                     NR_RA_t *ra,
+                                     nfapi_nr_ul_dci_request_t *ul_dci_req)
 {
   gNB_MAC_INST *nr_mac = RC.nrmac[module_idP];
   NR_COMMON_channels_t *cc = &nr_mac->common_channels[CC_id];
@@ -1607,7 +1609,11 @@ void prepare_dl_pdus(gNB_MAC_INST *nr_mac,
     LOG_D(NR_MAC,"numDlDci: %i\n", pdcch_pdu_rel15->numDlDci);
 }
 
-void nr_generate_Msg3_dcch_dtch_response(module_id_t module_idP, int CC_id, frame_t frameP, sub_frame_t slotP, NR_RA_t *ra,
+void nr_generate_Msg3_dcch_dtch_response(module_id_t module_idP,
+                                         int CC_id,
+                                         frame_t frameP,
+                                         sub_frame_t slotP,
+                                         NR_RA_t *ra,
                                          nfapi_nr_dl_tti_request_t *DL_req,
                                          nfapi_nr_tx_data_request_t *TX_req)
 {

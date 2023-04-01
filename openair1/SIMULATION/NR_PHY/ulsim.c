@@ -761,7 +761,7 @@ int main(int argc, char **argv)
   // nfapi_nr_ul_config_ulsch_pdu *rel15_ul = &ulsch_gNB->harq_process->ulsch_pdu;
   NR_Sched_Rsp_t *Sched_INFO = malloc(sizeof(*Sched_INFO));
   memset((void*)Sched_INFO,0,sizeof(*Sched_INFO));
-  nfapi_nr_ul_tti_request_t *UL_tti_req  = &Sched_INFO->UL_tti_req;
+  nfapi_nr_ul_tti_request_t *UL_tti_req = &Sched_INFO->UL_tti_req;
   Sched_INFO->sched_response_id = -1;
 
   nr_phy_data_tx_t phy_data = {0};
