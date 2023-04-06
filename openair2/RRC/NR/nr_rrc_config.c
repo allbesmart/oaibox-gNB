@@ -646,7 +646,8 @@ void prepare_sim_uecap(NR_UE_NR_Capability_t *cap,
                        NR_ServingCellConfigCommon_t *scc,
                        int numerology,
                        int rbsize,
-                       int mcs_table) {
+                       int mcs_table_dl,
+                       int mcs_table_ul) {
 
   NR_Phy_Parameters_t *phy_Parameters = &cap->phy_Parameters;
   int band = *scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0];
@@ -654,10 +655,15 @@ void prepare_sim_uecap(NR_UE_NR_Capability_t *cap,
   nr_bandnr->bandNR = band;
   asn1cSeqAdd(&cap->rf_Parameters.supportedBandListNR.list,
                    nr_bandnr);
-  if (mcs_table == 1) {
+  NR_BandNR_t *bandNRinfo = cap->rf_Parameters.supportedBandListNR.list.array[0];
+
+  if (mcs_table_ul == 1) {
+    bandNRinfo->pusch_256QAM = CALLOC(1,sizeof(*bandNRinfo->pusch_256QAM));
+    *bandNRinfo->pusch_256QAM = NR_BandNR__pusch_256QAM_supported;
+  }
+  if (mcs_table_dl == 1) {
     int bw = get_supported_band_index(numerology, band, rbsize);
     if (band>256) {
-      NR_BandNR_t *bandNRinfo = cap->rf_Parameters.supportedBandListNR.list.array[0];
       bandNRinfo->pdsch_256QAM_FR2 = CALLOC(1,sizeof(*bandNRinfo->pdsch_256QAM_FR2));
       *bandNRinfo->pdsch_256QAM_FR2 = NR_BandNR__pdsch_256QAM_FR2_supported;
     }
@@ -978,10 +984,53 @@ void scheduling_request_config(const NR_ServingCellConfigCommon_t *scc,
   asn1cSeqAdd(&pucch_Config->schedulingRequestResourceToAddModList->list,schedulingRequestResourceConfig);
 }
 
+void set_ul_mcs_table(NR_UE_NR_Capability_t *cap,
+                      const NR_ServingCellConfigCommon_t *scc,
+                      NR_PUSCH_Config_t *pusch_Config)
+{
+
+  if (cap == NULL){
+    pusch_Config->mcs_Table = NULL;
+    return;
+  }
+
+  int band;
+  if (scc->uplinkConfigCommon->frequencyInfoUL->frequencyBandList)
+    band = *scc->uplinkConfigCommon->frequencyInfoUL->frequencyBandList->list.array[0];
+  else
+    band = *scc->downlinkConfigCommon->frequencyInfoDL->frequencyBandList.list.array[0];
+  bool supported = false;
+  for (int i=0;i<cap->rf_Parameters.supportedBandListNR.list.count;i++) {
+    NR_BandNR_t *bandNRinfo = cap->rf_Parameters.supportedBandListNR.list.array[i];
+    if(bandNRinfo->bandNR == band && bandNRinfo->pusch_256QAM) {
+      supported = true;
+      break;
+    }
+  }
+  if (supported) {
+    if(pusch_Config->transformPrecoder == NULL ||
+       *pusch_Config->transformPrecoder == NR_PUSCH_Config__transformPrecoder_disabled) {
+      if(pusch_Config->mcs_Table == NULL)
+        pusch_Config->mcs_Table = calloc(1, sizeof(*pusch_Config->mcs_Table));
+      *pusch_Config->mcs_Table = NR_PUSCH_Config__mcs_Table_qam256;
+    }
+    else {
+      if(pusch_Config->mcs_TableTransformPrecoder == NULL)
+        pusch_Config->mcs_TableTransformPrecoder = calloc(1, sizeof(*pusch_Config->mcs_TableTransformPrecoder));
+      *pusch_Config->mcs_TableTransformPrecoder = NR_PUSCH_Config__mcs_TableTransformPrecoder_qam256;
+    }
+  }
+  else {
+    pusch_Config->mcs_Table = NULL;
+    pusch_Config->mcs_TableTransformPrecoder = NULL;
+  }
+}
+
 void set_dl_mcs_table(int scs,
                       NR_UE_NR_Capability_t *cap,
                       NR_BWP_DownlinkDedicated_t *bwp_Dedicated,
-                      const NR_ServingCellConfigCommon_t *scc) {
+                      const NR_ServingCellConfigCommon_t *scc)
+{
 
   if (cap == NULL){
     bwp_Dedicated->pdsch_Config->choice.setup->mcs_Table = NULL;
@@ -1023,7 +1072,7 @@ void set_dl_mcs_table(int scs,
     bwp_Dedicated->pdsch_Config->choice.setup->mcs_Table = NULL;
 }
 
-struct NR_SetupRelease_PUSCH_Config *config_pusch(NR_PUSCH_Config_t *pusch_Config)
+struct NR_SetupRelease_PUSCH_Config *config_pusch(NR_PUSCH_Config_t *pusch_Config, const NR_ServingCellConfigCommon_t *scc, NR_UE_NR_Capability_t *uecap)
 {
   struct NR_SetupRelease_PUSCH_Config *setup_puschconfig = calloc(1, sizeof(*setup_puschconfig));
   setup_puschconfig->present = NR_SetupRelease_PUSCH_Config_PR_setup;
@@ -1088,8 +1137,7 @@ struct NR_SetupRelease_PUSCH_Config *config_pusch(NR_PUSCH_Config_t *pusch_Confi
   pusch_Config->resourceAllocation = NR_PUSCH_Config__resourceAllocation_resourceAllocationType1;
   pusch_Config->pusch_TimeDomainAllocationList = NULL;
   pusch_Config->pusch_AggregationFactor = NULL;
-  pusch_Config->mcs_Table = NULL;
-  pusch_Config->mcs_TableTransformPrecoder = NULL;
+  set_ul_mcs_table(uecap, scc, pusch_Config);
   pusch_Config->transformPrecoder = NULL;
   if (!pusch_Config->codebookSubset)
     pusch_Config->codebookSubset = calloc(1, sizeof(*pusch_Config->codebookSubset));
@@ -1290,7 +1338,7 @@ void config_uplinkBWP(NR_BWP_Uplink_t *ubwp,
      bwp_loop < servingcellconfigdedicated->uplinkConfig->uplinkBWP_ToAddModList->list.count) {
     pusch_Config = servingcellconfigdedicated->uplinkConfig->uplinkBWP_ToAddModList->list.array[bwp_loop]->bwp_Dedicated->pusch_Config->choice.setup;
   }
-  ubwp->bwp_Dedicated->pusch_Config = config_pusch(pusch_Config);
+  ubwp->bwp_Dedicated->pusch_Config = config_pusch(pusch_Config, scc, configuration->force_256qam_off ? NULL : uecap);
 
   long maxMIMO_Layers = servingcellconfigdedicated &&
                                 servingcellconfigdedicated->uplinkConfig
