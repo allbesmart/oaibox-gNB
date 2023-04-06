@@ -993,26 +993,58 @@ NR_RLC_BearerConfig_t *get_DRB_RLC_BearerConfig(long lcChannelId, long drbId, NR
   return rlc_BearerConfig;
 }
 
-void fill_mastercellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig, NR_CellGroupConfig_t *ue_context_mastercellGroup, int use_rlc_um_for_drb, uint8_t configure_srb, uint8_t bearer_id_start, uint8_t nb_bearers_to_setup, long *priority) {
-
+void fill_mastercellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig,
+                                NR_CellGroupConfig_t *ue_context_mastercellGroup,
+                                int use_rlc_um_for_drb,
+                                uint8_t configure_srb,
+                                uint8_t bearer_id_start,
+                                uint8_t nb_bearers_to_setup,
+                                long *priority)
+{
   cellGroupConfig->cellGroupId = 0;
   cellGroupConfig->rlc_BearerToReleaseList = NULL;
   cellGroupConfig->rlc_BearerToAddModList = calloc(1, sizeof(*cellGroupConfig->rlc_BearerToAddModList));
 
   // RLC Bearer Config
   // TS38.331 9.2.1 Default SRB configurations
-  if (configure_srb){
-    NR_RLC_BearerConfig_t *rlc_BearerConfig = get_SRB_RLC_BearerConfig(2, 3, NR_LogicalChannelConfig__ul_SpecificParameters__bucketSizeDuration_ms5);
+  if (configure_srb) {
+    NR_RLC_BearerConfig_t *rlc_BearerConfig =
+        get_SRB_RLC_BearerConfig(2, 3, NR_LogicalChannelConfig__ul_SpecificParameters__bucketSizeDuration_ms5);
     asn1cSeqAdd(&cellGroupConfig->rlc_BearerToAddModList->list, rlc_BearerConfig);
-    asn1cSeqAdd(&ue_context_mastercellGroup->rlc_BearerToAddModList->list, rlc_BearerConfig);
+
+    // Check if ue_context_mastercellGroup->rlc_BearerToAddModList already contains this logicalChannelIdentity
+    bool add_bearerConfig = true;
+    for (int j = 0; j < ue_context_mastercellGroup->rlc_BearerToAddModList->list.count; j++) {
+      if (ue_context_mastercellGroup->rlc_BearerToAddModList->list.array[j]->logicalChannelIdentity
+          == rlc_BearerConfig->logicalChannelIdentity) {
+        add_bearerConfig = false;
+        break;
+      }
+    }
+    if (add_bearerConfig == true) {
+      asn1cSeqAdd(&ue_context_mastercellGroup->rlc_BearerToAddModList->list, rlc_BearerConfig);
+    }
   }
 
   // DRB Configuration
-  for (int i = bearer_id_start; i < bearer_id_start + nb_bearers_to_setup; i++ ){
+  for (int i = bearer_id_start; i < bearer_id_start + nb_bearers_to_setup; i++) {
     const NR_RLC_Config_PR rlc_conf = use_rlc_um_for_drb ? NR_RLC_Config_PR_um_Bi_Directional : NR_RLC_Config_PR_am;
-    NR_RLC_BearerConfig_t *rlc_BearerConfig = get_DRB_RLC_BearerConfig(3 + i, i, rlc_conf, priority[0]); // Fixme: priority hardcoded see caller function, all is wrong
+    NR_RLC_BearerConfig_t *rlc_BearerConfig =
+        get_DRB_RLC_BearerConfig(3 + i, i, rlc_conf, priority[0]); // Fixme: priority hardcoded see caller function, all is wrong
     asn1cSeqAdd(&cellGroupConfig->rlc_BearerToAddModList->list, rlc_BearerConfig);
-    asn1cSeqAdd(&ue_context_mastercellGroup->rlc_BearerToAddModList->list, rlc_BearerConfig);
+
+    // Check if ue_context_mastercellGroup->rlc_BearerToAddModList already contains this logicalChannelIdentity
+    bool add_bearerConfig = true;
+    for (int j = 0; j < ue_context_mastercellGroup->rlc_BearerToAddModList->list.count; j++) {
+      if (ue_context_mastercellGroup->rlc_BearerToAddModList->list.array[j]->logicalChannelIdentity
+          == rlc_BearerConfig->logicalChannelIdentity) {
+        add_bearerConfig = false;
+        break;
+      }
+    }
+    if (add_bearerConfig == true) {
+      asn1cSeqAdd(&ue_context_mastercellGroup->rlc_BearerToAddModList->list, rlc_BearerConfig);
+    }
   }
 }
 
