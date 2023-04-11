@@ -2086,6 +2086,8 @@ void configure_UE_BWP(gNB_MAC_INST *nr_mac,
       AssertFatal(dl_bwp_switch == ul_bwp_switch, "Different UL and DL BWP not supported\n");
       DL_BWP->bwp_id = dl_bwp_switch;
       UL_BWP->bwp_id = ul_bwp_switch;
+      sched_ctrl->next_dl_bwp_id = dl_bwp_switch;
+      sched_ctrl->next_ul_bwp_id = ul_bwp_switch;
     }
     else {
       // (re)configuring BWP
