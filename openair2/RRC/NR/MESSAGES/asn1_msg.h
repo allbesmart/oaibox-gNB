@@ -85,8 +85,7 @@ void fill_mastercellGroupConfig(NR_CellGroupConfig_t *cellGroupConfig,
                                 NR_CellGroupConfig_t *ue_context_mastercellGroup,
                                 int use_rlc_um_for_drb,
                                 uint8_t configure_srb,
-                                uint8_t bearer_id_start,
-                                uint8_t nb_bearers_to_setup,
+                                NR_DRB_ToAddModList_t *drb_configList,
                                 long *priority);
 
 int do_RRCSetup(rrc_gNB_ue_context_t         *const ue_context_pP,
