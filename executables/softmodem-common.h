@@ -103,7 +103,8 @@ extern "C"
 #define CONFIG_HLP_NFAPI         "Change the nFAPI mode for NR 'MONOLITHIC', 'PNF', 'VNF','UE_STUB_PNF','UE_STUB_OFFNET','STANDALONE_PNF'\n"
 #define CONFIG_L1_EMULATOR       "Run in L1 emulated mode (disable PHY layer)\n"
 #define CONFIG_HLP_CONTINUOUS_TX "perform continuous transmission, even in TDD mode (to work around USRP issues)\n"
-#define CONFIG_HLP_STATS_DISABLE "disable globally the stats generation and persistence"
+#define CONFIG_HLP_STATS_DISABLE "disable globally the stats generation and persistence\n"
+#define CONFIG_HLP_PDCP_DROP     "drop overloaded traffic at PDCP instead of RLC\n"
 
 /*-----------------------------------------------------------------------------------------------------------------------------------------------------*/
 /*                                            command line parameters common to eNodeB and UE                                                          */
@@ -135,6 +136,8 @@ extern "C"
 #define EMULATE_L1          softmodem_params.emulate_l1
 #define CONTINUOUS_TX       softmodem_params.continuous_tx
 #define REORDER_THREAD_DISABLE    softmodem_params.reorder_thread_disable
+#define PDCP_DROP           softmodem_params.pdcp_drop
+
 #define DEFAULT_RFCONFIG_FILE    "/usr/local/etc/syriq/ue.band7.tm1.PRB100.NR40.dat";
 
 extern int usrp_tx_thread;
@@ -177,6 +180,7 @@ extern int usrp_tx_thread;
   {"emulate-l1",            CONFIG_L1_EMULATOR,       PARAMFLAG_BOOL, .iptr=&EMULATE_L1,                      .defintval=0,             TYPE_INT,    0},  \
   {"continuous-tx",         CONFIG_HLP_CONTINUOUS_TX, PARAMFLAG_BOOL, .iptr=&CONTINUOUS_TX,                   .defintval=0,             TYPE_INT,    0},  \
   {"disable-stats",         CONFIG_HLP_STATS_DISABLE, PARAMFLAG_BOOL, .iptr=&stats_disabled,                  .defintval=0,             TYPE_INT,    0},  \
+  {"pdcp-drop",             CONFIG_HLP_PDCP_DROP,     PARAMFLAG_BOOL, .iptr=&PDCP_DROP,                       .defintval=0,             TYPE_INT,    0},  \
 }
 // clang-format on
 
@@ -218,6 +222,7 @@ extern int usrp_tx_thread;
                {"MONOLITHIC", "PNF", "VNF","UE_STUB_PNF","UE_STUB_OFFNET","STANDALONE_PNF"}, \
                {NFAPI_MONOLITHIC, NFAPI_MODE_PNF, NFAPI_MODE_VNF,NFAPI_UE_STUB_PNF,NFAPI_UE_STUB_OFFNET,NFAPI_MODE_STANDALONE_PNF}, \
                6 } }, \
+    { .s5 = { NULL } },                     \
     { .s5 = { NULL } },                     \
     { .s5 = { NULL } },                     \
     { .s5 = { NULL } },                     \
@@ -329,6 +334,7 @@ typedef struct {
   int            non_stop;
   int            emulate_l1;
   int            continuous_tx;
+  int            pdcp_drop;
 } softmodem_params_t;
 
 extern uint64_t get_softmodem_optmask(void);
