@@ -707,9 +707,8 @@ rrc_gNB_generate_dedicatedRRCReconfiguration(
 
   if(cell_groupConfig_from_DU == NULL){
     cellGroupConfig = calloc(1, sizeof(NR_CellGroupConfig_t));
-    // FIXME: fill_mastercellGroupConfig() won't fill the right priorities or
-    // bearer IDs for the DRBs
-    fill_mastercellGroupConfig(cellGroupConfig, ue_p->masterCellGroup, rrc->um_on_default_drb, (drb_id_to_setup_start < 2) ? 1 : 0, drb_id_to_setup_start, nb_drb_to_setup, drb_priority);
+    // FIXME: fill_mastercellGroupConfig() won't fill the right priorities
+    fill_mastercellGroupConfig(cellGroupConfig, ue_p->masterCellGroup, rrc->um_on_default_drb, (drb_id_to_setup_start < 2) ? 1 : 0, DRB_configList, drb_priority);
   }
   else{
     LOG_I(NR_RRC, "Master cell group originating from the DU \n");
@@ -1483,19 +1482,15 @@ void rrc_gNB_process_RRCReestablishmentComplete(const protocol_ctxt_t *const ctx
   ue_p->spCellConfigReestablishment = NULL;
   cellGroupConfig->spCellConfig = ue_p->masterCellGroup->spCellConfig;
   cellGroupConfig->physicalCellGroupConfig = ue_p->masterCellGroup->physicalCellGroupConfig;
+  cellGroupConfig->rlc_BearerToReleaseList = NULL;
+  cellGroupConfig->rlc_BearerToAddModList = calloc(1, sizeof(*cellGroupConfig->rlc_BearerToAddModList));
 
-  uint8_t drb_id_to_setup_start = ue_p->DRB_configList ? ue_p->DRB_configList->list.array[0]->drb_Identity : 1;
-  uint8_t nb_drb_to_setup = ue_p->DRB_configList ? ue_p->DRB_configList->list.count : ue_p->nb_of_pdusessions;
-  /* TODO: hardcoded to 13 for the time being, to be changed? */
-  long drb_priority[NGAP_MAX_DRBS_PER_UE] = {13};
-
-  fill_mastercellGroupConfig(cellGroupConfig,
-                             ue_p->masterCellGroup,
-                             rrc->um_on_default_drb,
-                             (drb_id_to_setup_start < 2) ? 1 : 0,
-                             drb_id_to_setup_start,
-                             nb_drb_to_setup,
-                             drb_priority);
+  /*
+   * Get SRB2, DRB configuration from the existing UE context,
+   * also start from SRB2 (i=1) and not from SRB1 (i=0).
+   */
+  for (i = 1; i < ue_p->masterCellGroup->rlc_BearerToAddModList->list.count; ++i)
+    asn1cSeqAdd(&cellGroupConfig->rlc_BearerToAddModList->list, ue_p->masterCellGroup->rlc_BearerToAddModList->list.array[i]);
 
   for (i = 0; i < cellGroupConfig->rlc_BearerToAddModList->list.count; i++) {
     cellGroupConfig->rlc_BearerToAddModList->list.array[i]->reestablishRLC =
@@ -2646,14 +2641,12 @@ static void rrc_DU_process_ue_context_setup_request(MessageDef *msg_p, instance_
   NR_DRB_ToAddMod_t            *DRB_config          = NULL;
   NR_DRB_ToAddModList_t        *DRB_configList      = NULL;
   uint8_t drb_id_to_setup_start = 0;
-  uint8_t nb_drb_to_setup = 0;
   long drb_priority[NGAP_MAX_DRBS_PER_UE];
   if(req->drbs_to_be_setup_length>0){
     if (UE->DRB_configList == NULL) {
       UE->DRB_configList = CALLOC(1, sizeof(*UE->DRB_configList));
     }
     DRB_configList = UE->DRB_configList;
-    nb_drb_to_setup = req->drbs_to_be_setup_length;
     for (int i=0; i<req->drbs_to_be_setup_length; i++){
       DRB_config = CALLOC(1, sizeof(*DRB_config));
       DRB_config->drb_Identity = req->drbs_to_be_setup[i].drb_id;
@@ -2681,9 +2674,8 @@ static void rrc_DU_process_ue_context_setup_request(MessageDef *msg_p, instance_
 
   NR_CellGroupConfig_t *cellGroupConfig = calloc(1, sizeof(NR_CellGroupConfig_t));
   if (req->srbs_to_be_setup_length > 0 || req->drbs_to_be_setup_length>0)
-    // FIXME: fill_mastercellGroupConfig() won't fill the right priorities or
-    // bearer IDs for the DRBs
-    fill_mastercellGroupConfig(cellGroupConfig, UE->masterCellGroup, rrc->um_on_default_drb, SRB2_config ? 1 : 0, drb_id_to_setup_start, nb_drb_to_setup, drb_priority);
+    // FIXME: fill_mastercellGroupConfig() won't fill the right priorities
+    fill_mastercellGroupConfig(cellGroupConfig, UE->masterCellGroup, rrc->um_on_default_drb, SRB2_config ? 1 : 0, DRB_configList, drb_priority);
   protocol_ctxt_t ctxt = {.rntiMaybeUEid = req->rnti, .module_id = instance, .instance = instance, .enb_flag = 1, .eNB_index = instance};
   apply_macrlc_config(rrc, ue_context_p, &ctxt);
   
@@ -2822,7 +2814,7 @@ static void rrc_DU_process_ue_context_modification_request(MessageDef *msg_p, in
 
   if(req->srbs_to_be_setup_length>0 || req->drbs_to_be_setup_length>0){
     cellGroupConfig = calloc(1, sizeof(NR_CellGroupConfig_t));
-    fill_mastercellGroupConfig(cellGroupConfig, UE->masterCellGroup, rrc->um_on_default_drb, drb_id_to_setup_start < 2 ? 1 : 0, drb_id_to_setup_start, req->drbs_to_be_setup_length, drb_priority);
+    fill_mastercellGroupConfig(cellGroupConfig, UE->masterCellGroup, rrc->um_on_default_drb, drb_id_to_setup_start < 2 ? 1 : 0, DRB_configList, drb_priority);
     apply_macrlc_config(rrc, ue_context_p, &ctxt);
   }
   if(req->ReconfigComplOutcome == RRCreconf_failure){
