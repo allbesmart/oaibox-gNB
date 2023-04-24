@@ -1481,6 +1481,7 @@ void rrc_gNB_process_RRCReestablishmentComplete(const protocol_ctxt_t *const ctx
   ue_p->masterCellGroup->spCellConfig = ue_p->spCellConfigReestablishment;
   ue_p->spCellConfigReestablishment = NULL;
   cellGroupConfig->spCellConfig = ue_p->masterCellGroup->spCellConfig;
+  cellGroupConfig->mac_CellGroupConfig = ue_p->masterCellGroup->mac_CellGroupConfig;
   cellGroupConfig->physicalCellGroupConfig = ue_p->masterCellGroup->physicalCellGroupConfig;
   cellGroupConfig->rlc_BearerToReleaseList = NULL;
   cellGroupConfig->rlc_BearerToAddModList = calloc(1, sizeof(*cellGroupConfig->rlc_BearerToAddModList));
