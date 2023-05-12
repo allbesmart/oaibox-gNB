@@ -374,6 +374,8 @@ int rrc_gNB_process_NGAP_INITIAL_CONTEXT_SETUP_REQ(MessageDef *msg_p, instance_t
   UE->amf_ue_ngap_id = req->amf_ue_ngap_id;
   uint8_t nb_pdusessions_tosetup = req->nb_of_pdusessions;
   if (nb_pdusessions_tosetup) {
+    LOG_E(NR_RRC, "PDU sessions in Initial context setup request not handled by E1 yet\n");
+    return 0;
     AssertFatal(false, "PDU sessions in Initial context setup request not handled by E1 yet\n");
     gtpv1u_gnb_create_tunnel_req_t create_tunnel_req = {0};
     for (int i = 0; i < nb_pdusessions_tosetup; i++) {
@@ -1286,7 +1288,6 @@ int rrc_gNB_process_NGAP_PDUSESSION_RELEASE_COMMAND(MessageDef *msg_p, instance_
       UE->pduSession[j].param.pdusession_id = cmd->pdusession_release_params[pdusession].pdusession_id;
       UE->pduSession[j].cause = NGAP_CAUSE_RADIO_NETWORK;
       UE->pduSession[j].cause_value = 30;
-      pduSession->xid = xid;
       continue;
     }
     if (pduSession->status == PDU_SESSION_STATUS_FAILED) {
