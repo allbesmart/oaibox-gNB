@@ -1127,6 +1127,10 @@ extern "C" {
       device->type = USRP_X400_DEV;
       usrp_master_clock = 245.76e6;
       args += boost::str(boost::format(",master_clock_rate=%f") % usrp_master_clock);
+
+      // https://kb.ettus.com/USRP_Host_Performance_Tuning_Tips_and_Tricks
+      if (0 != system("sysctl -w net.core.rmem_max=62500000 net.core.wmem_max=62500000"))
+        LOG_W(HW, "Can't set kernel parameters for X4x0\n");
     }
 
     s->usrp = uhd::usrp::multi_usrp::make(args);
@@ -1394,6 +1398,10 @@ extern "C" {
                                       openair0_cfg[0].tune_offset);
       s->usrp->set_rx_freq(rx_tune_req, i+choffset);
       set_rx_gain_offset(&openair0_cfg[0],i,bw_gain_adjust);
+      // Reset any rx_gain_offset
+      for (int chain_index = 0; chain_index < 4; chain_index++) {
+        openair0_cfg[0].rx_gain_offset[chain_index] = 0.0;
+      }
       ::uhd::gain_range_t gain_range = s->usrp->get_rx_gain_range(i+choffset);
       // limit to maximum gain
       double gain=openair0_cfg[0].rx_gain[i]-openair0_cfg[0].rx_gain_offset[i];

@@ -1840,6 +1840,7 @@ static int nr_rrc_gNB_decode_ccch(module_id_t module_id, rnti_t rnti, const uint
         protocol_ctxt_t ctxt = {.rntiMaybeUEid = rnti, .module_id = module_id, .instance = module_id, .enb_flag = 1, .eNB_index = module_id};
         rrc_gNB_generate_RRCReestablishment(&ctxt, ue_context_p, du_to_cu_rrc_container, gnb_rrc_inst->carrier.servingcellconfigcommon, 0);
 
+        RC.nrmac[0]->nr_rrc_reestablishments_counter++;
         LOG_I(NR_RRC, "CALLING RLC CONFIG SRB1 (rbid %d)\n", Idx);
       } break;
 

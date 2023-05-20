@@ -663,6 +663,7 @@ int get_mcs_from_bler(const NR_bler_options_t *bler_options,
     new_mcs -= 1;
   // else we are within threshold boundaries
 
+  new_mcs = max(new_mcs, bler_options->min_mcs);
   bler_stats->last_frame = frame;
   bler_stats->mcs = new_mcs;
   memcpy(bler_stats->rounds, stats->rounds, sizeof(stats->rounds));
@@ -2090,6 +2091,8 @@ void configure_UE_BWP(gNB_MAC_INST *nr_mac,
       AssertFatal(dl_bwp_switch == ul_bwp_switch, "Different UL and DL BWP not supported\n");
       DL_BWP->bwp_id = dl_bwp_switch;
       UL_BWP->bwp_id = ul_bwp_switch;
+      sched_ctrl->next_dl_bwp_id = dl_bwp_switch;
+      sched_ctrl->next_ul_bwp_id = ul_bwp_switch;
     }
     else {
       // (re)configuring BWP
