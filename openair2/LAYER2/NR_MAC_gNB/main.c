@@ -182,6 +182,9 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                            stats->ul.lc_bytes[lc_id]);
     }
   }
+  if (gNB->nr_rrc_reestablishments_counter > 0) {
+    output += snprintf(output, end - output, "NR_RRCReestablishments: %d\n", gNB->nr_rrc_reestablishments_counter);
+  }
   NR_SCHED_UNLOCK(&gNB->UE_info.mutex);
   return output - begin;
 }

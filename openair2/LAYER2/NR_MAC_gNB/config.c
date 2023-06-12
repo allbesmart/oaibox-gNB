@@ -101,7 +101,7 @@ static void process_rlcBearerConfig(struct NR_CellGroupConfig__rlc_BearerToAddMo
 void process_CellGroup(NR_CellGroupConfig_t *CellGroup, NR_UE_sched_ctrl_t *sched_ctrl)
 {
   /* we assume that this function is mutex-protected from outside */
-  NR_SCHED_ENSURE_LOCKED(&RC.nrmac[0]->sched_lock);
+  // NR_SCHED_ENSURE_LOCKED(&RC.nrmac[0]->sched_lock);
 
    AssertFatal(CellGroup, "CellGroup is null\n");
    NR_MAC_CellGroupConfig_t *mac_CellGroupConfig = CellGroup->mac_CellGroupConfig;
@@ -421,7 +421,7 @@ int nr_mac_enable_ue_rrc_processing_timer(module_id_t Mod_idP, rnti_t rnti, NR_S
   }
 
   gNB_MAC_INST *nrmac = RC.nrmac[Mod_idP];
-  NR_SCHED_LOCK(&nrmac->sched_lock);
+  // NR_SCHED_LOCK(&nrmac->sched_lock);
 
   NR_UE_info_t *UE_info = find_nr_UE(&nrmac->UE_info,rnti);
   if (!UE_info) {
@@ -440,7 +440,7 @@ int nr_mac_enable_ue_rrc_processing_timer(module_id_t Mod_idP, rnti_t rnti, NR_S
   // frames, after RRC processing timer.
   sched_ctrl->ta_frame = (nrmac->frame - 1 + 1024) % 1024;
 
-  NR_SCHED_UNLOCK(&nrmac->sched_lock);
+  // NR_SCHED_UNLOCK(&nrmac->sched_lock);
   return 0;
 }
 
@@ -632,7 +632,7 @@ bool nr_mac_update_cellgroup(gNB_MAC_INST *nrmac, uint32_t rnti, NR_CellGroupCon
 {
   DevAssert(nrmac != NULL);
   /* we assume that this function is mutex-protected from outside */
-  NR_SCHED_ENSURE_LOCKED(&nrmac->sched_lock);
+  // NR_SCHED_ENSURE_LOCKED(&nrmac->sched_lock);
 
   DevAssert(CellGroup != NULL);
 

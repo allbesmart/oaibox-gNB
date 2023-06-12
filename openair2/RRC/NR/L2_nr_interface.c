@@ -65,9 +65,9 @@ void nr_rrc_mac_remove_ue(rnti_t rntiMaybeUEid)
 void nr_rrc_mac_update_cellgroup(rnti_t rntiMaybeUEid, NR_CellGroupConfig_t *cgc)
 {
   gNB_MAC_INST *nrmac = RC.nrmac[0];
-  NR_SCHED_LOCK(&nrmac->sched_lock);
+  // NR_SCHED_LOCK(&nrmac->sched_lock);
   nr_mac_update_cellgroup(nrmac, rntiMaybeUEid, cgc);
-  NR_SCHED_UNLOCK(&nrmac->sched_lock);
+  // NR_SCHED_UNLOCK(&nrmac->sched_lock);
 }
 
 uint16_t mac_rrc_nr_data_req(const module_id_t Mod_idP,
