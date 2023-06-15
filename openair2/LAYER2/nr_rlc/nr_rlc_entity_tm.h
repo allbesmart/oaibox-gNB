@@ -36,6 +36,7 @@ typedef struct {
   nr_rlc_sdu_segment_t *tx_end;
   int                  tx_size;
   int                  tx_maxsize;
+  int                  tx_last_warning_size;
 } nr_rlc_entity_tm_t;
 
 void nr_rlc_entity_tm_recv_sdu(nr_rlc_entity_t *entity,
