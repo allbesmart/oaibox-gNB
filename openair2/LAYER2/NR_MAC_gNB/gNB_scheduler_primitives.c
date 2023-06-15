@@ -2991,11 +2991,11 @@ void nr_mac_check_ul_failure(const gNB_MAC_INST *nrmac, int rnti, NR_UE_sched_ct
   /* to trigger only once: trigger when ul_failure_timer == 1, but timer will
    * stop at 0 and we wait for a UE release command from upper layers */
   if (sched_ctrl->ul_failure_timer == 1) {
-    f1ap_ue_context_release_complete_t complete = {
+    f1ap_ue_context_release_req_t request = {
       .rnti = rnti,
       .cause = F1AP_CAUSE_RADIO_NETWORK,
       .cause_value = 12, // F1AP_CauseRadioNetwork_rl_failure_others
     };
-    nrmac->mac_rrc.ue_context_release_request(&complete);
+    nrmac->mac_rrc.ue_context_release_request(&request);
   }
 }
