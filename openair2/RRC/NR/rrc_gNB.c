@@ -661,7 +661,7 @@ void rrc_gNB_generate_dedicatedRRCReconfiguration(const protocol_ctxt_t *const c
 //-----------------------------------------------------------------------------
 {
   gNB_RRC_INST *rrc = RC.nrrrc[ctxt_pP->module_id];
-  int xid = -1;
+  uint8_t xid = -1;
 
   int drb_id_to_setup_start = 1;
   gNB_RRC_UE_t *ue_p = &ue_context_pP->ue_context;
@@ -692,6 +692,9 @@ void rrc_gNB_generate_dedicatedRRCReconfiguration(const protocol_ctxt_t *const c
 
     xid = ue_p->pduSession[j].xid;
   }
+
+  if (xid > 3)
+    xid = rrc_gNB_get_next_transaction_identifier(ctxt_pP->module_id);
 
   /* If list is empty free the list and reset the address */
   if (dedicatedNAS_MessageList->list.count == 0) {
