@@ -2434,7 +2434,8 @@ static void rrc_CU_process_ue_modification_required(MessageDef *msg_p)
       xer_fprint(stdout, &asn_DEF_NR_CellGroupConfig, UE->masterCellGroup);
 
     /* trigger reconfiguration */
-    rrc_gNB_generate_dedicatedRRCReconfiguration(&ctxt, ue_context_p);
+    //rrc_gNB_generate_dedicatedRRCReconfiguration(&ctxt, ue_context_p);
+    rrc_gNB_generate_defaultRRCReconfiguration(&ctxt, ue_context_p);
     return;
   }
   LOG_W(RRC, "nothing to be done after UE Context Modification Required for UE %04x\n", required->rnti);
