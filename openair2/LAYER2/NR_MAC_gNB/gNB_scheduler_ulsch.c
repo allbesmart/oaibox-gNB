@@ -796,8 +796,12 @@ static void _nr_rx_sdu(const module_id_t gnb_mod_idP,
                 reset_ul_harq_list(&UE_C->UE_sched_ctrl);
 
 		// Trigger a reconfiguration
-                LOG_I(NR_MAC, "Received UL_SCH_LCID_C_RNTI with C-RNTI 0x%04x, triggering reconfiguration\n", UE_C->rnti);
-                nr_mac_trigger_reconfiguration(RC.nrmac[gnb_mod_idP], UE_C);
+                if (UE->Msg4_ACKed) {
+                  LOG_I(NR_MAC, "Received UL_SCH_LCID_C_RNTI with C-RNTI 0x%04x, triggering reconfiguration\n", UE_C->rnti);
+                  nr_mac_trigger_reconfiguration(RC.nrmac[gnb_mod_idP], UE_C);
+                } else {
+                  AssertFatal(false, "what to do now?\n");
+                }
               }
             }
             else {
