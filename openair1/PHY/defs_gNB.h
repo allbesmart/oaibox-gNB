@@ -562,6 +562,8 @@ typedef struct {
   fourDimArray_t *n0_subband_power;
   //! estimated avg noise power per RB per RX ant (dB)
   fourDimArray_t *n0_subband_power_dB;
+  //! estimated avg power per RB per RX ant (lin)
+  fourDimArray_t *ulsch_power;
   //! estimated avg subband noise power (dB)
   unsigned int n0_subband_power_avg_dB;
   //! estimated avg subband noise power per antenna (dB)
