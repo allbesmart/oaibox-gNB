@@ -39,11 +39,6 @@
 
 //#define SRS_IND_DEBUG
 
-// This will force RA with Msg3 through DCCH by stop scheduling ulsch for "counter" times with "default_value" ulsch scheduling opportunities between each.
-int msg3_dcch_dtch_counter_2 = 20;
-const int msg3_dcch_dtch_trigger_2_default_value = 5000;
-int msg3_dcch_dtch_trigger_2 = msg3_dcch_dtch_trigger_2_default_value;
-
 const int get_ul_tda(gNB_MAC_INST *nrmac, const NR_ServingCellConfigCommon_t *scc, int frame, int slot)
 {
   /* we assume that this function is mutex-protected from outside */
@@ -230,8 +225,7 @@ static int nr_process_mac_pdu(instance_t module_idP,
           if (ra->state >= WAIT_Msg3 && ra->rnti == UE->rnti) {
             ra->crnti = ((pduP[1]&0xFF)<<8)|(pduP[2]&0xFF);
             ra->state = Msg3_dcch_dtch;
-            msg3_dcch_dtch_trigger_2 = msg3_dcch_dtch_trigger_2_default_value;
-            msg3_dcch_dtch_counter_2--;
+            RC.nrmac[module_idP]->nr_msg3_dcch_dtch_counter++;
             break;
           }
         }
@@ -802,8 +796,8 @@ static void _nr_rx_sdu(const module_id_t gnb_mod_idP,
                 reset_dl_harq_list(&UE_C->UE_sched_ctrl);
                 reset_ul_harq_list(&UE_C->UE_sched_ctrl);
 
-		// Trigger a reconfiguration
-                if (UE->Msg4_ACKed) {
+                // Trigger a reconfiguration
+                if (UE_C->Msg4_ACKed) {
                   LOG_I(NR_MAC, "Received UL_SCH_LCID_C_RNTI with C-RNTI 0x%04x, triggering reconfiguration\n", UE_C->rnti);
                   nr_mac_trigger_reconfiguration(RC.nrmac[gnb_mod_idP], UE_C);
                 } else {
@@ -1475,7 +1469,7 @@ static void nr_ue_max_mcs_min_rb(int mu,
   }
 
   if (ph_limit < tx_power)
-    LOG_W(NR_MAC, "Normalized power %d based on current resources (RBs %d, MCS %d) exceed reported PHR %d (normalized value)\n",
+    LOG_D(NR_MAC, "Normalized power %d based on current resources (RBs %d, MCS %d) exceed reported PHR %d (normalized value)\n",
           tx_power, *Rb, *mcs, ph_limit);
 }
 
@@ -1951,16 +1945,6 @@ static bool nr_fr1_ulsch_preprocessor(module_id_t module_id, frame_t frame, sub_
 
   if (!is_xlsch_in_slot(nr_mac->ulsch_slot_bitmap[sched_slot / 64], sched_slot))
     return false;
-
-  if (msg3_dcch_dtch_counter_2 > 0) {
-    msg3_dcch_dtch_trigger_2--;
-    if (msg3_dcch_dtch_trigger_2 <= 0) {
-      if (msg3_dcch_dtch_trigger_2 % 100 == 0) {
-        LOG_W(PHY, "(%d.%d) Forcing RA with Msg3 through DCCH (stop scheduling ulsch), counter: %d timeout: %d\n", frame, slot, msg3_dcch_dtch_counter_2, msg3_dcch_dtch_trigger_2);
-      }
-      return false;
-    }
-  }
 
   sched_ctrl->sched_pusch.slot = sched_slot;
   sched_ctrl->sched_pusch.frame = sched_frame;

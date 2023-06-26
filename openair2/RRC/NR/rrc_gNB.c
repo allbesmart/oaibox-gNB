@@ -1484,18 +1484,22 @@ int nr_rrc_reconfiguration_req(rrc_gNB_ue_context_t         *const ue_context_pP
                                        NULL,
                                        masterCellGroup);
 
-  nr_rrc_mac_update_cellgroup(ue_context_pP->ue_context.rnti, masterCellGroup);
-
   gNB_RRC_INST *rrc = RC.nrrrc[ctxt_pP->module_id];
   nr_pdcp_data_req_srb(ctxt_pP->rntiMaybeUEid, DCCH, rrc_gNB_mui++, size, buffer, deliver_pdu_srb_f1, rrc);
 
   if (NODE_IS_DU(rrc->node_type) || NODE_IS_MONOLITHIC(rrc->node_type)) {
-    uint32_t delay_ms = ue_p->masterCellGroup && ue_p->masterCellGroup->spCellConfig && ue_p->masterCellGroup->spCellConfig->spCellConfigDedicated
+    nr_rrc_mac_update_cellgroup(ue_context_pP->ue_context.rnti, masterCellGroup);
+
+    uint32_t delay_ms = ue_p->masterCellGroup && ue_p->masterCellGroup->spCellConfig
+                                && ue_p->masterCellGroup->spCellConfig->spCellConfigDedicated
                                 && ue_p->masterCellGroup->spCellConfig->spCellConfigDedicated->downlinkBWP_ToAddModList
                             ? NR_RRC_RECONFIGURATION_DELAY_MS + NR_RRC_BWP_SWITCHING_DELAY_MS
                             : NR_RRC_RECONFIGURATION_DELAY_MS;
 
-    nr_mac_enable_ue_rrc_processing_timer(ctxt_pP->module_id, ue_p->rnti, *rrc->carrier.servingcellconfigcommon->ssbSubcarrierSpacing, delay_ms);
+    nr_mac_enable_ue_rrc_processing_timer(ctxt_pP->module_id,
+                                          ue_p->rnti,
+                                          *rrc->carrier.servingcellconfigcommon->ssbSubcarrierSpacing,
+                                          delay_ms);
   }
 
   return 0;
@@ -1698,6 +1702,7 @@ static int nr_rrc_gNB_decode_ccch(module_id_t module_id, rnti_t rnti, const uint
         protocol_ctxt_t ctxt = {.rntiMaybeUEid = rnti, .module_id = module_id, .instance = module_id, .enb_flag = 1, .eNB_index = module_id};
         rrc_gNB_generate_RRCReestablishment(&ctxt, ue_context_p, du_to_cu_rrc_container, gnb_rrc_inst->carrier.servingcellconfigcommon, 0);
 
+        RC.nrmac[0]->nr_rrc_reestablishments_counter++;
         LOG_I(NR_RRC, "CALLING RLC CONFIG SRB1 (rbid %d)\n", Idx);
       } break;
 
@@ -2437,8 +2442,9 @@ static void rrc_CU_process_ue_modification_required(MessageDef *msg_p)
       xer_fprint(stdout, &asn_DEF_NR_CellGroupConfig, UE->masterCellGroup);
 
     /* trigger reconfiguration */
+    nr_rrc_reconfiguration_req(ue_context_p, &ctxt, 0, 0);
     //rrc_gNB_generate_dedicatedRRCReconfiguration(&ctxt, ue_context_p);
-    rrc_gNB_generate_defaultRRCReconfiguration(&ctxt, ue_context_p);
+    //rrc_gNB_generate_defaultRRCReconfiguration(&ctxt, ue_context_p);
     return;
   }
   LOG_W(RRC, "nothing to be done after UE Context Modification Required for UE %04x\n", required->rnti);
