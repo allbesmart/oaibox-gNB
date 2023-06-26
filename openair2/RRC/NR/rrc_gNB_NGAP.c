@@ -819,7 +819,7 @@ void rrc_gNB_process_NGAP_PDUSESSION_SETUP_REQ(MessageDef *msg_p, instance_t ins
   }
   int xid = rrc_gNB_get_next_transaction_identifier(instance);
   UE->xids[xid] = RRC_PDUSESSION_ESTABLISH;
-  rrc->cucp_cuup.bearer_context_setup(&bearer_req, instance, xid);
+  rrc->cucp_cuup.bearer_context_setup(&bearer_req, instance);
   return;
 }
 
