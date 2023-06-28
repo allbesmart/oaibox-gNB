@@ -128,7 +128,8 @@ static int drb_config_gtpu_create(const protocol_ctxt_t *const ctxt_p,
                                      sdap_data_req);
 
   if (ret != 0) {
-    LOG_E(NR_RRC,"rrc_gNB_process_NGAP_PDUSESSION_SETUP_REQ : gtpv1u_create_ngu_tunnel failed,start to release UE rnti %ld\n",
+    LOG_E(NR_RRC,
+          "drb_config_gtpu_create=>gtpv1u_create_ngu_tunnel failed,start to release UE rnti %ld\n",
           create_tunnel_req.ue_id);
     return ret;
   }

@@ -668,11 +668,13 @@ void rrc_gNB_generate_dedicatedRRCReconfiguration(const protocol_ctxt_t *const c
 //-----------------------------------------------------------------------------
 {
   gNB_RRC_INST *rrc = RC.nrrrc[ctxt_pP->module_id];
+
+  uint8_t xid = rrc_gNB_get_next_transaction_identifier(ctxt_pP->module_id);
   int drb_id_to_setup_start = 1;
   gNB_RRC_UE_t *ue_p = &ue_context_pP->ue_context;
   NR_DRB_ToAddModList_t *DRB_configList = fill_DRB_configList(ue_p);
   int nb_drb_to_setup = DRB_configList ? DRB_configList->list.count : 0;
-
+  ue_p->xids[xid] = RRC_PDUSESSION_ESTABLISH;
   struct NR_RRCReconfiguration_v1530_IEs__dedicatedNAS_MessageList *dedicatedNAS_MessageList = NULL;
   NR_DedicatedNAS_Message_t *dedicatedNAS_Message = NULL;
   dedicatedNAS_MessageList = CALLOC(1, sizeof(struct NR_RRCReconfiguration_v1530_IEs__dedicatedNAS_MessageList));
@@ -686,7 +688,10 @@ void rrc_gNB_generate_dedicatedRRCReconfiguration(const protocol_ctxt_t *const c
     if (ue_p->pduSession[j].param.nas_pdu.buffer != NULL) {
       dedicatedNAS_Message = CALLOC(1, sizeof(NR_DedicatedNAS_Message_t));
       memset(dedicatedNAS_Message, 0, sizeof(OCTET_STRING_t));
-      OCTET_STRING_fromBuf(dedicatedNAS_Message, (char *)ue_p->pduSession[j].param.nas_pdu.buffer, ue_p->pduSession[j].param.nas_pdu.length);
+      OCTET_STRING_fromBuf(dedicatedNAS_Message,
+                           (char *)ue_p->pduSession[j].param.nas_pdu.buffer,
+                           ue_p->pduSession[j].param.nas_pdu.length);
+      ue_p->pduSession[j].status = PDU_SESSION_STATUS_DONE;
       asn1cSeqAdd(&dedicatedNAS_MessageList->list, dedicatedNAS_Message);
 
       LOG_I(NR_RRC, "add NAS info with size %d (pdusession idx %d)\n", ue_p->pduSession[j].param.nas_pdu.length, j);
@@ -694,6 +699,8 @@ void rrc_gNB_generate_dedicatedRRCReconfiguration(const protocol_ctxt_t *const c
       // TODO
       LOG_E(NR_RRC, "no NAS info (pdusession idx %d)\n", j);
     }
+
+    ue_p->pduSession[j].xid = xid;
   }
 
   /* If list is empty free the list and reset the address */
@@ -703,9 +710,7 @@ void rrc_gNB_generate_dedicatedRRCReconfiguration(const protocol_ctxt_t *const c
   }
 
   NR_CellGroupConfig_t *cellGroupConfig = ue_p->masterCellGroup;
-  uint8_t xid = rrc_gNB_get_next_transaction_identifier(ctxt_pP->module_id);
 
-  AssertFatal(xid != 0xFF, "Invalid xid %d. No PDU sessions setup to configure.\n", xid);
   uint8_t buffer[RRC_BUF_SIZE] = {0};
   NR_SRB_ToAddModList_t *SRBs = createSRBlist(ue_p, false);
   int size = do_RRCReconfiguration(ctxt_pP,
@@ -771,7 +776,7 @@ rrc_gNB_modify_dedicatedRRCReconfiguration(
   NR_DRB_ToAddModList_t *DRB_configList = fill_DRB_configList(ue_p);
   int qos_flow_index = 0;
   uint8_t xid = rrc_gNB_get_next_transaction_identifier(ctxt_pP->module_id);
-  ue_p->xids[xid] = RRC_DEDICATED_RECONF;
+  ue_p->xids[xid] = RRC_PDUSESSION_MODIFY;
 
   struct NR_RRCReconfiguration_v1530_IEs__dedicatedNAS_MessageList *dedicatedNAS_MessageList =
       CALLOC(1, sizeof(*dedicatedNAS_MessageList));
