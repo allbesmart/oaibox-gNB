@@ -81,20 +81,21 @@ unsigned char offset_mumimo_llr_drange[29][3]={{8,8,8},{7,7,7},{7,7,7},{7,7,7},{
 #define print_ints(s,x) printf("%s = %d %d %d %d\n",s,(x)[0],(x)[1],(x)[2],(x)[3])
 #define print_shorts(s,x) printf("%s = [%d+j*%d, %d+j*%d, %d+j*%d, %d+j*%d]\n",s,(x)[0],(x)[1],(x)[2],(x)[3],(x)[4],(x)[5],(x)[6],(x)[7])
 
-/* compute H_h_H matrix inversion up to 4x4 matrices */
-uint8_t nr_zero_forcing_rx(uint32_t rx_size_symbol,
-                           unsigned char n_rx,
-                           unsigned char n_tx,//number of layer
-                           int32_t rxdataF_comp[][n_rx][rx_size_symbol * NR_SYMBOLS_PER_SLOT],
-                           int32_t dl_ch_mag[][n_rx][rx_size_symbol],
-                           int32_t dl_ch_magb[][n_rx][rx_size_symbol],
-                           int32_t dl_ch_magr[][n_rx][rx_size_symbol],
-                           int32_t dl_ch_estimates_ext[][rx_size_symbol],
-                           unsigned short nb_rb,
-                           unsigned char mod_order,
-                           int shift,
-                           unsigned char symbol,
-                           int length);
+/* compute the MMSE up to 4x4 matrices */
+uint8_t nr_dlsch_mmse(uint32_t rx_size_symbol,
+                      unsigned char n_rx,
+                      unsigned char n_tx, // number of layer
+                      int32_t rxdataF_comp[][n_rx][rx_size_symbol * NR_SYMBOLS_PER_SLOT],
+                      int32_t dl_ch_mag[][n_rx][rx_size_symbol],
+                      int32_t dl_ch_magb[][n_rx][rx_size_symbol],
+                      int32_t dl_ch_magr[][n_rx][rx_size_symbol],
+                      int32_t dl_ch_estimates_ext[][rx_size_symbol],
+                      unsigned short nb_rb,
+                      unsigned char mod_order,
+                      int shift,
+                      unsigned char symbol,
+                      int length,
+                      uint32_t noise_var);
 
 /* Apply layer demapping */
 static void nr_dlsch_layer_demapping(int16_t *llr_cw[2],
@@ -261,7 +262,8 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
                 int nbRx,
                 int32_t rxdataF_comp[][nbRx][rx_size_symbol * NR_SYMBOLS_PER_SLOT],
                 c16_t ptrs_phase_per_slot[][NR_SYMBOLS_PER_SLOT],
-                int32_t ptrs_re_per_slot[][NR_SYMBOLS_PER_SLOT])
+                int32_t ptrs_re_per_slot[][NR_SYMBOLS_PER_SLOT],
+                uint32_t nvar)
 {
   const int nl = dlsch[0].Nl;
   const int matrixSz = ue->frame_parms.nb_antennas_rx * nl;
@@ -528,9 +530,23 @@ int nr_rx_pdsch(PHY_VARS_NR_UE *ue,
 
   if (n_rx > 1) {
     nr_dlsch_detection_mrc(rx_size_symbol, nl, n_rx, rxdataF_comp, NULL, dl_ch_mag, dl_ch_magb, dl_ch_magr, symbol, nb_rb_pdsch, nb_re_pdsch);
-    if (nl >= 2)//Apply zero forcing for 2, 3, and 4 Tx layers
-      nr_zero_forcing_rx(
-          rx_size_symbol, n_rx, nl, rxdataF_comp, dl_ch_mag, dl_ch_magb, dl_ch_magr, dl_ch_estimates_ext, nb_rb_pdsch, dlsch[0].dlsch_config.qamModOrder, *log2_maxh, symbol, nb_re_pdsch);
+    // Apply zero forcing for 2, 3, and 4 Tx layers
+    if (nl >= 2) {
+      nr_dlsch_mmse(rx_size_symbol,
+                    n_rx,
+                    nl,
+                    rxdataF_comp,
+                    dl_ch_mag,
+                    dl_ch_magb,
+                    dl_ch_magr,
+                    dl_ch_estimates_ext,
+                    nb_rb_pdsch,
+                    dlsch[0].dlsch_config.qamModOrder,
+                    *log2_maxh,
+                    symbol,
+                    nb_re_pdsch,
+                    nvar);
+    }
   }
   stop_meas(&ue->generic_stat_bis[slot]);
 
@@ -1777,23 +1793,23 @@ void nr_conjch0_mult_ch1(int *ch0,
   _m_empty();
 }
 
-/* Zero Forcing Rx function: up to 4 layers
- *
- *
- * */
-uint8_t nr_zero_forcing_rx(uint32_t rx_size_symbol,
-                           unsigned char n_rx,
-                           unsigned char n_tx,//number of layer
-                           int32_t rxdataF_comp[][n_rx][rx_size_symbol * NR_SYMBOLS_PER_SLOT],
-                           int32_t dl_ch_mag[][n_rx][rx_size_symbol],
-                           int32_t dl_ch_magb[][n_rx][rx_size_symbol],
-                           int32_t dl_ch_magr[][n_rx][rx_size_symbol],
-                           int32_t dl_ch_estimates_ext[][rx_size_symbol],
-                           unsigned short nb_rb,
-                           unsigned char mod_order,
-                           int shift,
-                           unsigned char symbol,
-                           int length)
+/*
+ * MMSE Rx function: up to 4 layers
+ */
+uint8_t nr_dlsch_mmse(uint32_t rx_size_symbol,
+                      unsigned char n_rx,
+                      unsigned char n_tx, // number of layer
+                      int32_t rxdataF_comp[][n_rx][rx_size_symbol * NR_SYMBOLS_PER_SLOT],
+                      int32_t dl_ch_mag[][n_rx][rx_size_symbol],
+                      int32_t dl_ch_magb[][n_rx][rx_size_symbol],
+                      int32_t dl_ch_magr[][n_rx][rx_size_symbol],
+                      int32_t dl_ch_estimates_ext[][rx_size_symbol],
+                      unsigned short nb_rb,
+                      unsigned char mod_order,
+                      int shift,
+                      unsigned char symbol,
+                      int length,
+                      uint32_t noise_var)
 {
   int *ch0r, *ch0c;
   uint32_t nb_rb_0 = length/12 + ((length%12)?1:0);
@@ -1821,6 +1837,18 @@ uint8_t nr_zero_forcing_rx(uint32_t rx_size_symbol,
                             shift);
         if (aarx != 0)
           nr_a_sum_b(conjH_H_elements[0][ctx][rtx], conjH_H_elements[aarx][ctx][rtx], nb_rb_0);
+      }
+    }
+  }
+
+  // Add noise_var such that: H^h * H + noise_var * I
+  if (noise_var != 0) {
+    __m128i nvar_128i = simde_mm_set1_epi32(noise_var >> 3);
+    for (int p = 0; p < n_tx; p++) {
+      __m128i *conjH_H_128i = (__m128i *)conjH_H_elements[0][p][p];
+      for (int k = 0; k < 3 * nb_rb_0; k++) {
+        conjH_H_128i[0] = simde_mm_add_epi32(conjH_H_128i[0], nvar_128i);
+        conjH_H_128i++;
       }
     }
   }

@@ -1310,13 +1310,17 @@ void NFAPI_NR_DMRS_TYPE1_linear_interp(NR_DL_FRAME_PARMS *frame_parms,
                                        unsigned short bwp_start_subcarrier,
                                        unsigned short nb_rb_pdsch,
                                        int8_t delta,
-                                       delay_t *delay)
+                                       delay_t *delay,
+                                       uint32_t *nvar)
 {
   c16_t *dl_ch0 = dl_ch;
   int re_offset = bwp_start_subcarrier % frame_parms->ofdm_symbol_size;
 
   c16_t dl_ls_est[frame_parms->ofdm_symbol_size] __attribute__((aligned(32)));
   memset(dl_ls_est, 0, sizeof(dl_ls_est));
+
+  int nest_count = 0;
+  uint64_t noise_amp2 = 0;
 
   for (int pilot_cnt = 0; pilot_cnt < 6 * nb_rb_pdsch; pilot_cnt++) {
     if (pilot_cnt % 2 == 0) {
@@ -1373,6 +1377,12 @@ void NFAPI_NR_DMRS_TYPE1_linear_interp(NR_DL_FRAME_PARMS *frame_parms,
   c16_t *dl_inv_delay_table = frame_parms->delay_table[inv_delay_idx];
   for (int k = 0; k < 12 * nb_rb_pdsch; k++) {
     dl_ch[k] = c16mulShift(dl_ch[k], dl_inv_delay_table[k], 8);
+    noise_amp2 += c16amp2(c16sub(dl_ls_est[k], dl_ch[k]));
+    nest_count++;
+  }
+
+  if (nvar && nest_count > 0) {
+    *nvar = (uint32_t)(noise_amp2 / (nest_count * frame_parms->nb_antennas_rx));
   }
 }
 
@@ -1469,13 +1479,17 @@ void NFAPI_NR_DMRS_TYPE2_linear_interp(NR_DL_FRAME_PARMS *frame_parms,
                                        unsigned short nb_rb_pdsch,
                                        int8_t delta,
                                        unsigned short p,
-                                       delay_t *delay)
+                                       delay_t *delay,
+                                       uint32_t *nvar)
 {
   int re_offset = bwp_start_subcarrier % frame_parms->ofdm_symbol_size;
   c16_t *dl_ch0 = dl_ch;
 
   c16_t dl_ls_est[frame_parms->ofdm_symbol_size] __attribute__((aligned(32)));
   memset(dl_ls_est, 0, sizeof(dl_ls_est));
+
+  int nest_count = 0;
+  uint64_t noise_amp2 = 0;
 
   for (int pilot_cnt = 0; pilot_cnt < 4 * nb_rb_pdsch; pilot_cnt += 2) {
     c16_t ch_l = c16mulShift(*pil, rxF[re_offset], 15);
@@ -1525,6 +1539,12 @@ void NFAPI_NR_DMRS_TYPE2_linear_interp(NR_DL_FRAME_PARMS *frame_parms,
   c16_t *dl_inv_delay_table = frame_parms->delay_table[inv_delay_idx];
   for (int k = 0; k < 12 * nb_rb_pdsch; k++) {
     dl_ch[k] = c16mulShift(dl_ch[k], dl_inv_delay_table[k], 8);
+    noise_amp2 += c16amp2(c16sub(dl_ls_est[k], dl_ch[k]));
+    nest_count++;
+  }
+
+  if (nvar && nest_count > 0) {
+    *nvar = (uint32_t)(noise_amp2 / (nest_count * frame_parms->nb_antennas_rx));
   }
 }
 
@@ -1626,7 +1646,8 @@ int nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
                                 uint32_t pdsch_est_size,
                                 int32_t dl_ch_estimates[][pdsch_est_size],
                                 int rxdataFsize,
-                                c16_t rxdataF[][rxdataFsize])
+                                c16_t rxdataF[][rxdataFsize],
+                                uint32_t *nvar)
 {
   int gNB_id = proc->gNB_id;
   int Ns = proc->nr_slot_rx;
@@ -1690,7 +1711,8 @@ int nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
                                         bwp_start_subcarrier,
                                         nb_rb_pdsch,
                                         delta,
-                                        &delay);
+                                        &delay,
+                                        nvar);
 
     } else if (config_type == NFAPI_NR_DMRS_TYPE2 && ue->chest_freq == 0) {
       NFAPI_NR_DMRS_TYPE2_linear_interp(&ue->frame_parms,
@@ -1701,7 +1723,8 @@ int nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
                                         nb_rb_pdsch,
                                         delta,
                                         p,
-                                        &delay);
+                                        &delay,
+                                        nvar);
 
     } else if (config_type == NFAPI_NR_DMRS_TYPE1) {
       NFAPI_NR_DMRS_TYPE1_average_prb(&ue->frame_parms,
