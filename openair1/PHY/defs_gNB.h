@@ -546,6 +546,8 @@ typedef struct gNB_L1_proc_t_s {
   int RU_mask_prach;
   /// set of scheduling variables RXn-TXnp4 threads
   gNB_L1_rxtx_proc_t L1_proc, L1_proc_tx;
+  /// pthread structure for dumping gNB stats
+  pthread_t oaibox_data_export_thread;
 } gNB_L1_proc_t;
 
 typedef struct {
@@ -780,6 +782,8 @@ typedef struct PHY_VARS_gNB_s {
   void *scopeData;
   /// structure for analyzing high-level RT measurements
   rt_L1_profiling_t rt_L1_profiling; 
+  uint32_t harq_count;
+  uint32_t ldpc_iterations_count;
 } PHY_VARS_gNB;
 
 typedef struct LDPCDecode_s {
