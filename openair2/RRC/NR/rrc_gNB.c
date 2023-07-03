@@ -661,7 +661,7 @@ void rrc_gNB_generate_dedicatedRRCReconfiguration(const protocol_ctxt_t *const c
 //-----------------------------------------------------------------------------
 {
   gNB_RRC_INST *rrc = RC.nrrrc[ctxt_pP->module_id];
-  int xid = -1;
+  uint8_t xid = -1;
 
   int drb_id_to_setup_start = 1;
   gNB_RRC_UE_t *ue_p = &ue_context_pP->ue_context;
@@ -693,15 +693,18 @@ void rrc_gNB_generate_dedicatedRRCReconfiguration(const protocol_ctxt_t *const c
     xid = ue_p->pduSession[j].xid;
   }
 
+  if (xid > 3)
+    xid = rrc_gNB_get_next_transaction_identifier(ctxt_pP->module_id);
+
   /* If list is empty free the list and reset the address */
   if (dedicatedNAS_MessageList->list.count == 0) {
     free(dedicatedNAS_MessageList);
     dedicatedNAS_MessageList = NULL;
   }
 
+  AssertFatal(xid >= 0 && xid <= 3, "Invalid xid %d\n", xid);
   NR_CellGroupConfig_t *cellGroupConfig = ue_p->masterCellGroup;
 
-  AssertFatal(xid > -1, "Invalid xid %d. No PDU sessions setup to configure.\n", xid);
   uint8_t buffer[RRC_BUF_SIZE] = {0};
   NR_SRB_ToAddModList_t *SRBs = createSRBlist(ue_p, false);
   int size = do_RRCReconfiguration(ctxt_pP,
@@ -1481,18 +1484,22 @@ int nr_rrc_reconfiguration_req(rrc_gNB_ue_context_t         *const ue_context_pP
                                        NULL,
                                        masterCellGroup);
 
-  nr_rrc_mac_update_cellgroup(ue_context_pP->ue_context.rnti, masterCellGroup);
-
   gNB_RRC_INST *rrc = RC.nrrrc[ctxt_pP->module_id];
   nr_pdcp_data_req_srb(ctxt_pP->rntiMaybeUEid, DCCH, rrc_gNB_mui++, size, buffer, deliver_pdu_srb_f1, rrc);
 
   if (NODE_IS_DU(rrc->node_type) || NODE_IS_MONOLITHIC(rrc->node_type)) {
-    uint32_t delay_ms = ue_p->masterCellGroup && ue_p->masterCellGroup->spCellConfig && ue_p->masterCellGroup->spCellConfig->spCellConfigDedicated
+    nr_rrc_mac_update_cellgroup(ue_context_pP->ue_context.rnti, masterCellGroup);
+
+    uint32_t delay_ms = ue_p->masterCellGroup && ue_p->masterCellGroup->spCellConfig
+                                && ue_p->masterCellGroup->spCellConfig->spCellConfigDedicated
                                 && ue_p->masterCellGroup->spCellConfig->spCellConfigDedicated->downlinkBWP_ToAddModList
                             ? NR_RRC_RECONFIGURATION_DELAY_MS + NR_RRC_BWP_SWITCHING_DELAY_MS
                             : NR_RRC_RECONFIGURATION_DELAY_MS;
 
-    nr_mac_enable_ue_rrc_processing_timer(ctxt_pP->module_id, ue_p->rnti, *rrc->carrier.servingcellconfigcommon->ssbSubcarrierSpacing, delay_ms);
+    nr_mac_enable_ue_rrc_processing_timer(ctxt_pP->module_id,
+                                          ue_p->rnti,
+                                          *rrc->carrier.servingcellconfigcommon->ssbSubcarrierSpacing,
+                                          delay_ms);
   }
 
   return 0;
@@ -2387,6 +2394,61 @@ static void rrc_CU_process_ue_context_modification_response(MessageDef *msg_p, i
   }
 }
 
+static void rrc_CU_process_ue_modification_required(MessageDef *msg_p)
+{
+  f1ap_ue_context_modif_required_t *required = &F1AP_UE_CONTEXT_MODIFICATION_REQUIRED(msg_p);
+  protocol_ctxt_t ctxt = {.rntiMaybeUEid = required->rnti, .module_id = 0, .instance = 0, .enb_flag = 1, .eNB_index = 0};
+  gNB_RRC_INST *rrc = RC.nrrrc[ctxt.module_id];
+  rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context_by_rnti(rrc, required->rnti);
+  if (ue_context_p == NULL) {
+    LOG_E(RRC, "unknown UE RNTI %04x, cannot handle UE context modification request\n", required->rnti);
+    f1ap_ue_context_modif_refuse_t refuse = {
+      .rnti = required->rnti,
+      .cause = F1AP_CAUSE_RADIO_NETWORK,
+      .cause_value = 2, // F1AP_CauseRadioNetwork_unknown_or_already_allocated_gnb_cu_ue_f1ap_id
+    };
+    rrc->mac_rrc.ue_context_modification_refuse(&refuse);
+    return;
+  }
+
+  if (required->du_to_cu_rrc_information && required->du_to_cu_rrc_information->cellGroupConfig) {
+    LOG_I(RRC, "UE Context Modification Required: new CellGroupConfig for UE %04x, triggering reconfiguration\n", required->rnti);
+    gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
+
+    NR_CellGroupConfig_t *cellGroupConfig = NULL;
+    asn_dec_rval_t dec_rval = uper_decode_complete(NULL,
+                                                   &asn_DEF_NR_CellGroupConfig,
+                                                   (void **)&cellGroupConfig,
+                                                   (uint8_t *)required->du_to_cu_rrc_information->cellGroupConfig,
+                                                   required->du_to_cu_rrc_information->cellGroupConfig_length);
+    if (dec_rval.code != RC_OK && dec_rval.consumed == 0) {
+      LOG_E(RRC, "Cell group config decode error, refusing reconfiguration\n");
+      f1ap_ue_context_modif_refuse_t refuse = {
+        .rnti = required->rnti,
+        .cause = F1AP_CAUSE_PROTOCOL,
+        .cause_value = 0, // F1AP_CauseProtocol_transfer_syntax_error
+      };
+      rrc->mac_rrc.ue_context_modification_refuse(&refuse);
+      return;
+    }
+
+    if (UE->masterCellGroup) {
+      ASN_STRUCT_FREE(asn_DEF_NR_CellGroupConfig, UE->masterCellGroup);
+      LOG_I(RRC, "UE %04x replacing existing CellGroupConfig with new one received from DU\n", UE->rnti);
+    }
+    UE->masterCellGroup = cellGroupConfig;
+    if (LOG_DEBUGFLAG(DEBUG_ASN1))
+      xer_fprint(stdout, &asn_DEF_NR_CellGroupConfig, UE->masterCellGroup);
+
+    /* trigger reconfiguration */
+    nr_rrc_reconfiguration_req(ue_context_p, &ctxt, 0, 0);
+    //rrc_gNB_generate_dedicatedRRCReconfiguration(&ctxt, ue_context_p);
+    //rrc_gNB_generate_defaultRRCReconfiguration(&ctxt, ue_context_p);
+    return;
+  }
+  LOG_W(RRC, "nothing to be done after UE Context Modification Required for UE %04x\n", required->rnti);
+}
+
 unsigned int mask_flip(unsigned int x) {
   return((((x>>8) + (x<<8))&0xffff)>>6);
 }
@@ -2800,6 +2862,10 @@ void *rrc_gnb_task(void *args_p) {
 
       case F1AP_UE_CONTEXT_MODIFICATION_RESP:
         rrc_CU_process_ue_context_modification_response(msg_p, instance);
+        break;
+
+      case F1AP_UE_CONTEXT_MODIFICATION_REQUIRED:
+        rrc_CU_process_ue_modification_required(msg_p);
         break;
 
       case F1AP_UE_CONTEXT_RELEASE_REQ:
