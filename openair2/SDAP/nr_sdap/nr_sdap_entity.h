@@ -170,4 +170,6 @@ nr_sdap_entity_t *nr_sdap_get_entity(ue_id_t ue_id, int pdusession_id);
 /* Entity Handling Related Functions */
 void delete_nr_sdap_entity(ue_id_t ue_id);
 
+void nr_sdap_reestablishment(ue_id_t ue_id, ue_id_t reestablish_ue_id);
+
 #endif

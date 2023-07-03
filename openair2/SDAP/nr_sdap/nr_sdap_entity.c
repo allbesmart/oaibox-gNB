@@ -506,3 +506,22 @@ void nr_sdap_delete_ue_entities(ue_id_t ue_id)
     pos++;
   }
 }
+
+void nr_sdap_reestablishment(ue_id_t ue_id, ue_id_t reestablish_ue_id)
+{
+  // Remove the new UE and all of its entities
+  nr_sdap_delete_ue_entities(ue_id);
+
+  nr_sdap_entity_t *entityPtr = sdap_info.sdap_entity_llist;
+  while (entityPtr != NULL) {
+    if (entityPtr->ue_id == reestablish_ue_id) {
+      entityPtr->ue_id = ue_id;
+      LOG_I(SDAP,
+            "Updating SDAP entity from UE %lx to %lx for PDU Session id %d\n",
+            reestablish_ue_id,
+            ue_id,
+            entityPtr->pdusession_id);
+    }
+    entityPtr = entityPtr->next_entity;
+  }
+}

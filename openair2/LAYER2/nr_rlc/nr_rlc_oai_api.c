@@ -860,6 +860,38 @@ void nr_rlc_add_drb(int rnti, int drb_id, const NR_RLC_BearerConfig_t *rlc_Beare
   LOG_I(RLC, "%s:%s:%d: added DRB to UE with RNTI 0x%x\n", __FILE__, __FUNCTION__, __LINE__, rnti);
 }
 
+void nr_rlc_reestablishment(int rnti, ue_id_t reestablish_ue_id)
+{
+  // Remove the new UE
+  nr_rlc_remove_ue(rnti);
+
+  nr_rlc_manager_lock(nr_rlc_ue_manager);
+  nr_rlc_ue_t *ue = nr_rlc_manager_get_ue(nr_rlc_ue_manager, (int)reestablish_ue_id);
+  if (ue != NULL) {
+    ue->rnti = rnti;
+    ue->ue_id = rnti;
+    LOG_I(PDCP, "Updating RLC entity from UE %lx to %x\n", reestablish_ue_id, rnti);
+  } else {
+    LOG_E(PDCP, "Cannot find RLC entity for UE %lx\n", reestablish_ue_id);
+  }
+
+  nr_rlc_entity_t *rb;
+  for (int i = 0; i < 3; i++) {
+    rb = ue->srb[i];
+    if (rb != NULL) {
+      rb->reestablishment(rb);
+    }
+  }
+
+  for (int i = 0; i < MAX_DRBS_PER_UE; i++) {
+    rb = ue->drb[i];
+    if (rb != NULL) {
+      rb->reestablishment(rb);
+    }
+  }
+  nr_rlc_manager_unlock(nr_rlc_ue_manager);
+}
+
 /* Dummy function due to dependency from LTE libraries */
 rlc_op_status_t rrc_rlc_config_asn1_req (const protocol_ctxt_t   * const ctxt_pP,
     const LTE_SRB_ToAddModList_t   * const srb2add_listP,
