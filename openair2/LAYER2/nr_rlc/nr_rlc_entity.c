@@ -30,6 +30,7 @@
 #include "LOG/log.h"
 
 #include "common/utils/time_stat.h"
+#include "executables/softmodem-common.h"
 
 static void nr_rlc_entity_get_stats(
     nr_rlc_entity_t *entity,
@@ -117,6 +118,9 @@ nr_rlc_entity_t *new_nr_rlc_entity_am(
    */
   ret->common.txsdu_avg_time_to_tx = time_average_new(100 * 1000, 1024);
 
+  /* we drop in RLC if we don't drop in PDCP */
+  ret->common.do_drop = !get_softmodem_params()->pdcp_drop;
+
   return (nr_rlc_entity_t *)ret;
 }
 
@@ -172,6 +176,9 @@ nr_rlc_entity_t *new_nr_rlc_entity_um(
    */
   ret->common.txsdu_avg_time_to_tx = time_average_new(100 * 1000, 1024);
 
+  /* we drop in RLC if we don't drop in PDCP */
+  ret->common.do_drop = !get_softmodem_params()->pdcp_drop;
+
   return (nr_rlc_entity_t *)ret;
 }
 
@@ -211,6 +218,9 @@ nr_rlc_entity_t *new_nr_rlc_entity_tm(
    * initial_size of 1024 is arbitrary
    */
   ret->common.txsdu_avg_time_to_tx = time_average_new(100 * 1000, 1024);
+
+  /* we drop in RLC if we don't drop in PDCP */
+  ret->common.do_drop = !get_softmodem_params()->pdcp_drop;
 
   return (nr_rlc_entity_t *)ret;
 }

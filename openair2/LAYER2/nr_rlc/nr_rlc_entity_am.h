@@ -79,6 +79,7 @@ typedef struct {
   nr_rlc_sdu_segment_t *tx_end;
   int                  tx_size;
   int                  tx_maxsize;
+  int                  tx_last_warning_size;
 
   nr_rlc_sdu_segment_t *wait_list;
   nr_rlc_sdu_segment_t *wait_end;

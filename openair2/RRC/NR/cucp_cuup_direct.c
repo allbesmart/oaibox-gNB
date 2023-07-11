@@ -190,6 +190,15 @@ static void cucp_cuup_bearer_context_setup_direct(e1ap_bearer_setup_req_t *const
   // the code is very badly organized, it is not possible here to call freeDRBlist() 
   ASN_STRUCT_FREE(asn_DEF_NR_DRB_ToAddModList,DRB_configList );
 
+  if (NODE_IS_MONOLITHIC(RC.nrrrc[ctxt.module_id]->node_type)) {
+    for (int i = 0; i < UE->DRB_configList->list.count; i++) {
+      NR_DRB_ToAddMod_t *drb = UE->DRB_configList->list.array[i];
+      int rlc_rnti = UE->rnti;
+      int rlc_channel_id = drb->drb_Identity + 3;
+      nr_pdcp_set_rlc_ids(UE->rnti, false, drb->drb_Identity, rlc_rnti, rlc_channel_id);
+    }
+  }
+
   // Used to store teids: if monolithic, will simply be NULL
   if(!NODE_IS_CU(RC.nrrrc[ctxt.module_id]->node_type)) {
     // intentionally empty
