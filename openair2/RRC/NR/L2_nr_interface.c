@@ -54,8 +54,6 @@ extern RAN_CONTEXT_t RC;
 
 void nr_rrc_mac_remove_ue(rnti_t rntiMaybeUEid)
 {
-  nr_rlc_remove_ue(rntiMaybeUEid);
-
   gNB_MAC_INST *nrmac = RC.nrmac[0];
   NR_SCHED_LOCK(&nrmac->sched_lock);
   mac_remove_nr_ue(nrmac, rntiMaybeUEid);

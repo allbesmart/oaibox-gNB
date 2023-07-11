@@ -186,4 +186,6 @@ bool nr_sdap_delete_entity(ue_id_t ue_id, int pdusession_id);
  * @return                  True, it deleted at least one entity, false otherwise.
  */
 bool nr_sdap_delete_ue_entities(ue_id_t ue_id);
+
+void nr_sdap_reestablishment(ue_id_t ue_id, ue_id_t reestablish_ue_id);
 #endif
