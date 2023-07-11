@@ -24,6 +24,7 @@
 #include "mac_proto.h"
 #include "openair2/LAYER2/nr_rlc/nr_rlc_oai_api.h"
 #include "openair2/RRC/NR/MESSAGES/asn1_msg.h"
+#include "F1AP_CauseRadioNetwork.h"
 
 #include "uper_decoder.h"
 #include "uper_encoder.h"
@@ -244,6 +245,46 @@ void ue_context_modification_request(const f1ap_ue_context_modif_req_t *req)
   }
 }
 
+void ue_context_modification_confirm(const f1ap_ue_context_modif_confirm_t *confirm)
+{
+  LOG_I(MAC, "Received UE Context Modification Confirm for UE %04x\n", confirm->rnti);
+  if (confirm->rrc_container_length > 0)
+    nr_rlc_srb_recv_sdu(confirm->rnti, DCCH, confirm->rrc_container, confirm->rrc_container_length);
+
+  /* nothing else to be done? */
+}
+
+void ue_context_modification_refuse(const f1ap_ue_context_modif_refuse_t *refuse)
+{
+  /* Currently, we only use the UE Context Modification Required procedure to
+   * trigger a RRC reconfigurtion after Msg.3 with C-RNTI MAC CE. If the CU
+   * refuses, it cannot do this reconfiguration, leaving the UE in an
+   * unconfigured state. Therefore, we just free all RA-related info, and
+   * request the release of the UE.  */
+  LOG_W(MAC, "Received UE Context Modification Refuse for %04x, requesting release\n", refuse->rnti);
+
+  gNB_MAC_INST *mac = RC.nrmac[0];
+  NR_SCHED_LOCK(&mac->sched_lock);
+  NR_UE_info_t *UE = find_nr_UE(&RC.nrmac[0]->UE_info, refuse->rnti);
+  AssertFatal(UE != NULL, "could not find UE %04x\n", refuse->rnti);
+
+  const int CC_id = 0;
+  NR_COMMON_channels_t *cc = &mac->common_channels[CC_id];
+  for (int i = 0; i < NR_NB_RA_PROC_MAX; i++) {
+    NR_RA_t *ra = &cc->ra[i];
+    if (ra->crnti == refuse->rnti)
+      nr_clear_ra_proc(0, CC_id, 0 /* frame */, ra);
+  }
+  NR_SCHED_UNLOCK(&mac->sched_lock);
+
+  f1ap_ue_context_release_req_t request = {
+    .rnti = refuse->rnti,
+    .cause = F1AP_CAUSE_RADIO_NETWORK,
+    .cause_value = F1AP_CauseRadioNetwork_procedure_cancelled,
+  };
+  mac->mac_rrc.ue_context_release_request(&request);
+}
+
 void ue_context_release_command(const f1ap_ue_context_release_cmd_t *cmd)
 {
   /* mark UE as to be deleted after PUSCH failure */
@@ -266,15 +307,11 @@ void ue_context_release_command(const f1ap_ue_context_release_cmd_t *cmd)
     .rnti = cmd->rnti,
   };
   mac->mac_rrc.ue_context_release_complete(&complete);
-
-  if (cmd->rrc_container)
-    free(cmd->rrc_container);
 }
 
-int dl_rrc_message(module_id_t module_id, const f1ap_dl_rrc_message_t *dl_rrc)
+void dl_rrc_message_transfer(const f1ap_dl_rrc_message_t *dl_rrc)
 {
   LOG_D(NR_MAC, "DL RRC Message Transfer with %d bytes for RNTI %04x SRB %d\n", dl_rrc->rrc_container_length, dl_rrc->rnti, dl_rrc->srb_id);
 
   nr_rlc_srb_recv_sdu(dl_rrc->rnti, dl_rrc->srb_id, dl_rrc->rrc_container, dl_rrc->rrc_container_length);
-  return 0;
 }
