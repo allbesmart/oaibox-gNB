@@ -2065,6 +2065,7 @@ add_executable(nr-softmodem
   ${PHY_INTERFACE_DIR}/queue_t.c
   ${OPENAIR1_DIR}/PHY/TOOLS/phy_scope_interface.c
   ${T_SOURCE}
+  ${OPENAIR_DIR}/executables/oaibox_data_export.c
   )
 
 target_link_libraries(nr-softmodem PRIVATE

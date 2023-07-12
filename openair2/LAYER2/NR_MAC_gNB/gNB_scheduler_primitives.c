@@ -663,6 +663,7 @@ int get_mcs_from_bler(const NR_bler_options_t *bler_options,
     new_mcs -= 1;
   // else we are within threshold boundaries
 
+  new_mcs = max(new_mcs, bler_options->min_mcs);
   bler_stats->last_frame = frame;
   bler_stats->mcs = new_mcs;
   memcpy(bler_stats->rounds, stats->rounds, sizeof(stats->rounds));

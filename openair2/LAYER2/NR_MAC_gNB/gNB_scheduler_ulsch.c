@@ -225,6 +225,7 @@ static int nr_process_mac_pdu(instance_t module_idP,
           if (ra->state >= WAIT_Msg3 && ra->rnti == UE->rnti) {
             ra->crnti = ((pduP[1]&0xFF)<<8)|(pduP[2]&0xFF);
             ra->state = Msg3_dcch_dtch;
+            RC.nrmac[module_idP]->nr_msg3_c_rnti_counter++;
             break;
           }
         }
@@ -1464,7 +1465,7 @@ static void nr_ue_max_mcs_min_rb(int mu,
   }
 
   if (ph_limit < tx_power)
-    LOG_W(NR_MAC, "Normalized power %d based on current resources (RBs %d, MCS %d) exceed reported PHR %d (normalized value)\n",
+    LOG_D(NR_MAC, "Normalized power %d based on current resources (RBs %d, MCS %d) exceed reported PHR %d (normalized value)\n",
           tx_power, *Rb, *mcs, ph_limit);
 }
 
