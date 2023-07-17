@@ -1666,6 +1666,7 @@ static int nr_rrc_gNB_decode_ccch(module_id_t module_id, rnti_t rnti, const uint
                                             gnb_rrc_inst->carrier.servingcellconfigcommon,
                                             0);
 
+        RC.nrmac[0]->nr_rrc_reestablishment_counter++;
       } break;
 
       case NR_UL_CCCH_MessageType__c1_PR_rrcSystemInfoRequest:
