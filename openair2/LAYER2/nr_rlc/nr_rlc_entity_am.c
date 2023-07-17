@@ -735,7 +735,7 @@ void nr_rlc_entity_am_recv_pdu(nr_rlc_entity_t *_entity,
   }
 
   if (!sn_in_recv_window(entity, sn)) {
-    LOG_D(RLC, "%s:%d:%s: warning: discard PDU, sn out of window (sn %d rx_next %d)\n",
+    LOG_W(RLC, "%s:%d:%s: warning: discard PDU, sn out of window (sn %d rx_next %d)\n",
           __FILE__, __LINE__, __FUNCTION__,
            sn, entity->rx_next);
 
