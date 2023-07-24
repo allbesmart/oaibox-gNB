@@ -768,32 +768,40 @@ int gtpv1u_create_ngu_tunnel(const instance_t instance,
   return !GTPNOK;
 }
 
-int gtpv1u_update_ngu_tunnel(const instance_t instanceP, const gtpv1u_gnb_create_tunnel_req_t *const create_tunnel_req_pP, const ue_id_t prior_ue_id)
+void gtpu_ngu_tunnel_reestablishment(const instance_t instanceP, const ue_id_t ue_id, const ue_id_t reestablish_ue_id)
 {
-  LOG_D(GTPU, "[%ld] Update tunnels from UEid %lx to UEid %lx\n", instanceP, prior_ue_id, create_tunnel_req_pP->ue_id);
-
   pthread_mutex_lock(&globGtp.gtp_lock);
 
   auto inst = &globGtp.instances[compatInst(instanceP)];
-  auto it = inst->ue2te_mapping.find(prior_ue_id);
-  if (it == inst->ue2te_mapping.end()) {
-    LOG_W(GTPU, "[%ld] Delete GTP tunnels for UEid: %lx, but no tunnel exits\n", instanceP, prior_ue_id);
-    pthread_mutex_unlock(&globGtp.gtp_lock);
-    return GTPNOK;
-  }
 
-  for (int i = 0; i < create_tunnel_req_pP->num_tunnels; i++) {
-    teid_t incoming_teid = inst->ue2te_mapping[prior_ue_id].bearers[create_tunnel_req_pP->pdusession_id[i]].teid_incoming;
-    if (globGtp.te2ue_mapping[incoming_teid].ue_id == prior_ue_id) {
-      globGtp.te2ue_mapping[incoming_teid].ue_id = create_tunnel_req_pP->ue_id;
+  auto it = inst->ue2te_mapping.find(reestablish_ue_id);
+  if (it == inst->ue2te_mapping.end()) {
+    LOG_E(GTPU, "[%ld] Updating GTP tunnels for UE %lx, but no tunnel exits!\n", instanceP, reestablish_ue_id);
+  } else {
+    inst->ue2te_mapping[ue_id] = it->second;
+    inst->ue2te_mapping.erase(it);
+
+    for (int i = 0; i < NR_GTPV1U_MAX_BEARERS_PER_UE; i++) {
+      if (inst->ue2te_mapping[ue_id].bearers[i].teid_outgoing != 0) {
+        LOG_I(GTPU,
+              "Updating GTPU from UE %lx to %lx for drb_id %d teid_outgoing %u\n",
+              reestablish_ue_id,
+              ue_id,
+              i,
+              inst->ue2te_mapping[ue_id].bearers[i].teid_outgoing);
+      }
     }
   }
 
-  inst->ue2te_mapping[create_tunnel_req_pP->ue_id] = it->second;
-  inst->ue2te_mapping.erase(it);
+  for (int i = 0; i < NR_GTPV1U_MAX_BEARERS_PER_UE; i++) {
+    teid_t incoming_teid = inst->ue2te_mapping[ue_id].bearers[i].teid_incoming;
+    if (globGtp.te2ue_mapping[incoming_teid].ue_id == reestablish_ue_id) {
+      globGtp.te2ue_mapping[incoming_teid].ue_id = ue_id;
+      LOG_I(GTPU, "Updating GTPU from UE %lx to %lx for te2ue %u\n", reestablish_ue_id, ue_id, incoming_teid);
+    }
+  }
 
   pthread_mutex_unlock(&globGtp.gtp_lock);
-  return !GTPNOK;
 }
 
 int gtpv1u_create_x2u_tunnel(

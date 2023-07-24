@@ -42,6 +42,8 @@ struct NR_LogicalChannelConfig;
 void nr_rlc_add_srb(int rnti, int srb_id, const NR_RLC_BearerConfig_t *rlc_BearerConfig);
 void nr_rlc_add_drb(int rnti, int drb_id, const NR_RLC_BearerConfig_t *rlc_BearerConfig);
 
+void nr_rlc_reestablishment(int rnti, ue_id_t reestablish_ue_id);
+
 void nr_rlc_remove_ue(int rnti);
 
 int nr_rlc_get_available_tx_space(

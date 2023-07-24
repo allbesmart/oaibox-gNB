@@ -107,16 +107,28 @@ static int drb_config_gtpu_create(const protocol_ctxt_t *const ctxt_p,
   gtpv1u_gnb_create_tunnel_resp_t create_tunnel_resp={0};
   gNB_RRC_UE_t *UE = &ue_context_p->ue_context;
   LOG_W(NR_RRC, "recreate existing tunnels, while adding new ones\n");
+
+  int n = 0;
+  int offset = 0;
   for (int i = 0; i < UE->nb_of_pdusessions; i++) {
+    if (UE->pduSession[i].status >= PDU_SESSION_STATUS_DONE) {
+      AssertFatal(
+          n == 0,
+          "Current implementation does not support creation of multiple GTPU tunnels for non-contiguous DRBs at the same time!\n");
+      offset++;
+      continue;
+    }
+
     rrc_pdu_session_param_t *pdu = UE->pduSession + i;
-    create_tunnel_req.pdusession_id[i] = pdu->param.pdusession_id;
-    create_tunnel_req.incoming_rb_id[i] = i + 1;
-    create_tunnel_req.outgoing_qfi[i] = req->pduSession[i].DRBnGRanList[0].qosFlows[0].id;
-    memcpy(&create_tunnel_req.dst_addr[i].buffer, &pdu->param.upf_addr.buffer, sizeof(create_tunnel_req.dst_addr[0].buffer));
-    create_tunnel_req.dst_addr[i].length = pdu->param.upf_addr.length;
-    create_tunnel_req.outgoing_teid[i] = pdu->param.gtp_teid;
+    create_tunnel_req.pdusession_id[n] = pdu->param.pdusession_id;
+    create_tunnel_req.incoming_rb_id[n] = i + 1;
+    create_tunnel_req.outgoing_qfi[n] = req->pduSession[i].DRBnGRanList[0].qosFlows[0].id;
+    memcpy(&create_tunnel_req.dst_addr[n].buffer, &pdu->param.upf_addr.buffer, sizeof(create_tunnel_req.dst_addr[0].buffer));
+    create_tunnel_req.dst_addr[n].length = pdu->param.upf_addr.length;
+    create_tunnel_req.outgoing_teid[n] = pdu->param.gtp_teid;
+    n++;
   }
-  create_tunnel_req.num_tunnels = UE->nb_of_pdusessions;
+  create_tunnel_req.num_tunnels = n;
   create_tunnel_req.ue_id = UE->rnti;
   int ret = gtpv1u_create_ngu_tunnel(getCxtE1(instance)->gtpInstN3,
                                      &create_tunnel_req,
@@ -131,7 +143,7 @@ static int drb_config_gtpu_create(const protocol_ctxt_t *const ctxt_p,
     return ret;
   }
 
-  nr_rrc_gNB_process_GTPV1U_CREATE_TUNNEL_RESP(ctxt_p, &create_tunnel_resp, 0);
+  nr_rrc_gNB_process_GTPV1U_CREATE_TUNNEL_RESP(ctxt_p, &create_tunnel_resp, offset);
 
   uint8_t kRRCenc[16] = {0};
   uint8_t kRRCint[16] = {0};
@@ -151,7 +163,6 @@ static int drb_config_gtpu_create(const protocol_ctxt_t *const ctxt_p,
   LOG_D(NR_RRC, "Configuring PDCP DRBs for UE %x\n", UE->rnti);
   nr_pdcp_add_drbs(ctxt_p->enb_flag,
                    ctxt_p->rntiMaybeUEid,
-                   0,
                    DRB_configList,
                    (UE->integrity_algorithm << 4) | UE->ciphering_algorithm,
                    kUPenc,
