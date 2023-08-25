@@ -656,7 +656,9 @@ void nr_rlc_add_srb(int rnti, int srb_id, const NR_RLC_BearerConfig_t *rlc_Beare
                                                       t_poll_retransmit,
                                                       t_reassembly, t_status_prohibit,
                                                       poll_pdu, poll_byte, max_retx_threshold,
-                                                      sn_field_length);
+                                                      sn_field_length,
+                                                      /* we drop in RLC if we don't drop in PDCP */
+                                                      !get_softmodem_params()->pdcp_drop);
     nr_rlc_ue_add_srb_rlc_entity(ue, srb_id, nr_rlc_am);
 
     LOG_I(RLC, "%s:%d:%s: added srb %d to UE with RNTI 0x%x\n", __FILE__, __LINE__, __FUNCTION__, srb_id, rnti);
@@ -731,7 +733,9 @@ static void add_drb_am(int rnti, int drb_id, const NR_RLC_BearerConfig_t *rlc_Be
                                                       t_poll_retransmit,
                                                       t_reassembly, t_status_prohibit,
                                                       poll_pdu, poll_byte, max_retx_threshold,
-                                                      sn_field_length);
+                                                      sn_field_length,
+                                                      /* we drop in RLC if we don't drop in PDCP */
+                                                      !get_softmodem_params()->pdcp_drop);
     nr_rlc_ue_add_drb_rlc_entity(ue, drb_id, nr_rlc_am);
 
     LOG_I(RLC, "%s:%d:%s: added drb %d to UE with RNTI 0x%x\n", __FILE__, __LINE__, __FUNCTION__, drb_id, rnti);
@@ -792,7 +796,9 @@ static void add_drb_um(int rnti, int drb_id, const NR_RLC_BearerConfig_t *rlc_Be
                                                       RLC_TX_MAXSIZE,
                                                       deliver_sdu, ue,
                                                       t_reassembly,
-                                                      sn_field_length);
+                                                      sn_field_length,
+                                                      /* we drop in RLC if we don't drop in PDCP */
+                                                      !get_softmodem_params()->pdcp_drop);
     nr_rlc_ue_add_drb_rlc_entity(ue, drb_id, nr_rlc_um);
 
     LOG_D(RLC, "%s:%d:%s: added drb %d to UE with RNTI 0x%x\n", __FILE__, __LINE__, __FUNCTION__, drb_id, rnti);
@@ -878,7 +884,9 @@ void nr_rlc_activate_srb0(int rnti, struct gNB_MAC_INST_s *mac, void *rawUE,
   }
 
   nr_rlc_tm = new_nr_rlc_entity_tm(10000,
-                                   deliver_sdu_srb0, srb0_data);
+                                   deliver_sdu_srb0, srb0_data,
+                                   /* we drop in RLC if we don't drop in PDCP */
+                                   !get_softmodem_params()->pdcp_drop);
   nr_rlc_ue_add_srb_rlc_entity(ue, 0, nr_rlc_tm);
 
   LOG_I(RLC, "activated srb0 for UE with RNTI 0x%x\n", rnti);

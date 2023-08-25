@@ -1680,6 +1680,14 @@ int32_t nr_rrc_ue_establish_drb(module_id_t ue_mod_idP,
                       kUPenc,
                       kUPint,
                       ue_rrc->cell_group_config->rlc_BearerToAddModList);
+
+     for (int i = 0; i < radioBearerConfig->drb_ToAddModList->list.count; i++) {
+       NR_DRB_ToAddMod_t *drb = radioBearerConfig->drb_ToAddModList->list.array[i];
+       int rlc_rnti = ctxt_pP->rntiMaybeUEid;
+       int rlc_channel_id = drb->drb_Identity + 3;
+       nr_pdcp_set_rlc_ids(ctxt_pP->rntiMaybeUEid, false, drb->drb_Identity, rlc_rnti, rlc_channel_id);
+     }
+
      // Refresh DRBs
      nr_rrc_addmod_drbs(ctxt_pP->rntiMaybeUEid,
                         radioBearerConfig->drb_ToAddModList,

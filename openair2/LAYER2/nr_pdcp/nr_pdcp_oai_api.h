@@ -105,4 +105,6 @@ nr_pdcp_ue_manager_t *nr_pdcp_sdap_get_ue_manager();
 
 const bool nr_pdcp_get_statistics(ue_id_t ue_id, int srb_flag, int rb_id, nr_pdcp_statistics_t *out);
 
+void nr_pdcp_set_rlc_ids(ue_id_t ue_id, bool srb_flag, int rb_id, int rlc_rnti, int rlc_channel_id);
+
 #endif /* NR_PDCP_OAI_API_H */

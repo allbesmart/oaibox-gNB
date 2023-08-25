@@ -136,7 +136,7 @@ void nr_rlc_entity_tm_recv_sdu(nr_rlc_entity_t *_entity,
     exit(1);
   }
 
-  if (entity->tx_size + size > entity->tx_maxsize) {
+  if (entity->common.do_drop && entity->tx_size + size > entity->tx_maxsize) {
     LOG_D(RLC, "%s:%d:%s: warning: SDU rejected, SDU buffer full\n",
           __FILE__, __LINE__, __FUNCTION__);
 
@@ -147,6 +147,19 @@ void nr_rlc_entity_tm_recv_sdu(nr_rlc_entity_t *_entity,
   }
 
   entity->tx_size += size;
+
+  /* warn about excessive memory usage every tx_maxsize MB
+   * (might happen when RLC doesn't drop packets but PDCP does)
+   */
+  if (entity->tx_size > entity->tx_last_warning_size &&
+      entity->tx_size - entity->tx_last_warning_size > entity->tx_maxsize) {
+    entity->tx_last_warning_size += entity->tx_maxsize;
+    LOG_W(RLC, "TX list memory usage is over %dMB\n",
+           entity->tx_last_warning_size / 1000000);
+  } else if (entity->tx_size < entity->tx_last_warning_size &&
+             entity->tx_last_warning_size - entity->tx_size > entity->tx_maxsize) {
+    entity->tx_last_warning_size = (entity->tx_size / entity->tx_maxsize) * entity->tx_maxsize;
+  }
 
   sdu = nr_rlc_new_sdu(buffer, size, sdu_id);
 
@@ -207,5 +220,5 @@ void nr_rlc_entity_tm_delete(nr_rlc_entity_t *_entity)
 int nr_rlc_entity_tm_available_tx_space(nr_rlc_entity_t *_entity)
 {
   nr_rlc_entity_tm_t *entity = (nr_rlc_entity_tm_t *)_entity;
-  return entity->tx_maxsize - entity->tx_size;
+  return entity->tx_size > entity->tx_maxsize ? 0 : entity->tx_maxsize - entity->tx_size;
 }
