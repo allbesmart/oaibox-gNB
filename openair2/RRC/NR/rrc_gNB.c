@@ -1495,6 +1495,7 @@ static int handle_rrcReestablishmentComplete(const protocol_ctxt_t *const ctxt_p
                                              reestablishment_complete->rrc_TransactionIdentifier);
 
   UE->ue_reestablishment_counter++;
+  RC.nrmac[0]->nr_rrc_reestablishment_counter++;
   return 0;
 }
 

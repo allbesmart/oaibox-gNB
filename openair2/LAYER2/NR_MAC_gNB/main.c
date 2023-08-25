@@ -183,6 +183,13 @@ size_t dump_mac_stats(gNB_MAC_INST *gNB, char *output, size_t strlen, bool reset
                            stats->ul.lc_bytes[lc_id]);
     }
   }
+  if (gNB->nr_msg3_c_rnti_counter > 0 || gNB->nr_rrc_reestablishment_counter > 0) {
+    output += snprintf(output,
+                       end - output,
+                       "Msg3 C-RNTI: %d NR_RRCReestablishment: %d\n",
+                       gNB->nr_msg3_c_rnti_counter,
+                       gNB->nr_rrc_reestablishment_counter);
+  }
   NR_SCHED_UNLOCK(&gNB->UE_info.mutex);
   return output - begin;
 }
