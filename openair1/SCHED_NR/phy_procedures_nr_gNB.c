@@ -264,7 +264,20 @@ static void nr_postDecode(PHY_VARS_gNB *gNB, notifiedFIFO_elt_t *req)
   //int dumpsig=0;
   // if all segments are done
   if (rdata->nbSegments == ulsch_harq->processedSegments) {
-    if (!check_abort(&ulsch_harq->abort_decode) && !gNB->pusch_vars[rdata->ulsch_id].DTX) {
+    // Check ULSCH transport block CRC
+    uint32_t A = ulsch_harq->TBS << 3;
+    uint32_t B = 0;
+    int crc_type = 0;
+    if (A > 3824) {
+      B = A + 24;
+      crc_type = CRC24_A;
+    } else {
+      B = A + 16;
+      crc_type = CRC16;
+    }
+    uint8_t crc_flag = check_crc(ulsch_harq->b, B, crc_type);
+
+    if (crc_flag == 1 && !check_abort(&ulsch_harq->abort_decode) && !gNB->pusch_vars[rdata->ulsch_id].DTX) {
       LOG_D(PHY,
             "[gNB %d] ULSCH: Setting ACK for SFN/SF %d.%d (rnti %x, pid %d, ndi %d, status %d, round %d, TBS %d, Max interation "
             "(all seg) %d)\n",

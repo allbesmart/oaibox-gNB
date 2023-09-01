@@ -463,7 +463,21 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
 
     VCD_SIGNAL_DUMPER_DUMP_FUNCTION_BY_NAME(VCD_SIGNAL_DUMPER_FUNCTIONS_PHY_gNB_ULSCH_DECODING, 0);
 
+    uint8_t crc_flag = 0;
     if (harq_process->processedSegments == harq_process->C) {
+      // Check ULSCH transport block CRC
+      uint32_t B = 0;
+      if (A > 3824) {
+        B = A + 24;
+        crc_type = CRC24_A;
+      } else {
+        B = A + 16;
+        crc_type = CRC16;
+      }
+      crc_flag = check_crc(harq_process->b, B, crc_type);
+    }
+
+    if (crc_flag == 1) {
       LOG_D(PHY, "[gNB %d] ULSCH: Setting ACK for slot %d TBS %d\n", phy_vars_gNB->Mod_id, ulsch->slot, harq_process->TBS);
       ulsch->active = false;
       harq_process->round = 0;
