@@ -552,7 +552,7 @@ int nr_rate_matching_ldpc_rx(uint32_t Tbslbrm,
 #endif
 
   if (clear == 1)
-    memset(w, 0, Ncb * sizeof(int16_t));
+    memset(w, 0, (68 * 384) * sizeof(int16_t));
 
   k=0;
 

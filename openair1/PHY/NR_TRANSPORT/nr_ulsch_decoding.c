@@ -276,7 +276,6 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
       LOG_E(PHY, "ulsch_decoding.c: NULL harq_process pointer\n");
       return -1;
   }
-  uint8_t dtx_det = 0;
 
   int Kr;
   int Kr_bytes;
@@ -291,8 +290,6 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
   // ------------------------------------------------------------------
 
   harq_process->TBS = pusch_pdu->pusch_data.tb_size;
-
-  dtx_det = 0;
 
   uint32_t A = (harq_process->TBS) << 3;
 
@@ -382,11 +379,10 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
   Kr_bytes = Kr >> 3;
 
   uint32_t offset = 0;
-  if (phy_vars_gNB->ldpc_offload_flag && mcs > 9) {
+  if (phy_vars_gNB->ldpc_offload_flag) {
     int8_t llrProcBuf[22 * 384];
-    //  if (dtx_det==0) {
-    int16_t z_ol[68 * 384];
-    int8_t l_ol[68 * 384];
+    int16_t z_ol[68 * 384 + 16];
+    int8_t l_ol[68 * 384 + 16];
     int crc_type;
     int length_dec;
 
@@ -408,47 +404,44 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
 
       decParams.R = nr_get_R_ldpc_decoder(pusch_pdu->pusch_data.rv_index, E, decParams.BG, decParams.Z, &harq_process->llrLen, harq_process->round);
 
-      if ((dtx_det == 0) && (pusch_pdu->pusch_data.rv_index == 0)) {
-        // if (dtx_det==0){
-          memcpy((&z_ol[0]), ulsch_llr + r_offset, E * sizeof(short));
-          __m128i *pv_ol128 = (__m128i *)&z_ol;
-          __m128i *pl_ol128 = (__m128i *)&l_ol;
-          for (int i = 0, j = 0; j < ((kc * harq_process->Z) >> 4) + 1; i += 2, j++) {
-            pl_ol128[j] = _mm_packs_epi16(pv_ol128[i], pv_ol128[i + 1]);
-          }
+      memcpy((&z_ol[0]), ulsch_llr + r_offset, E * sizeof(short));
+      __m128i *pv_ol128 = (__m128i *)&z_ol;
+      __m128i *pl_ol128 = (__m128i *)&l_ol;
+      for (int i = 0, j = 0; j < ((kc * harq_process->Z) >> 4) + 1; i += 2, j++) {
+        pl_ol128[j] = _mm_packs_epi16(pv_ol128[i], pv_ol128[i + 1]);
+      }
 
-          int ret = nrLDPC_decoder_offload(&decParams, harq_pid, ULSCH_id, r, pusch_pdu->pusch_data.rv_index, harq_process->F, E, Qm, (int8_t *)&pl_ol128[0], llrProcBuf, 1);
-          if (ret < 0) {
-            LOG_E(PHY, "ulsch_decoding.c: Problem in LDPC decoder offload\n");
+      int ret = nrLDPC_decoder_offload(&decParams,
+                                       harq_pid,
+                                       ULSCH_id,
+                                       r,
+                                       pusch_pdu->pusch_data.rv_index,
+                                       harq_process->F,
+                                       E,
+                                       Qm,
+                                       (int8_t *)&pl_ol128[0],
+                                       llrProcBuf,
+                                       1);
+      if (ret < 0) {
+        LOG_E(PHY, "ulsch_decoding.c: Problem in LDPC decoder offload\n");
 
-            decodeIterations = ulsch->max_ldpc_iterations + 1;
-            return -1;
-          }
-        for (int m = 0; m < Kr >> 3; m++) {
-          harq_process->c[r][m] = (uint8_t)llrProcBuf[m];
-        }
+        decodeIterations = ulsch->max_ldpc_iterations + 1;
+        return -1;
+      }
+      for (int m = 0; m < Kr >> 3; m++) {
+        harq_process->c[r][m] = (uint8_t)llrProcBuf[m];
+      }
 
-        if (check_crc((uint8_t *)llrProcBuf, length_dec, crc_type)) {
-          PRINT_CRC_CHECK(LOG_I(PHY, "Segment %d CRC OK\n", r));
-          decodeIterations = 2;
-        } else {
-          PRINT_CRC_CHECK(LOG_I(PHY, "segment %d CRC NOK\n", r));
-          decodeIterations = ulsch->max_ldpc_iterations + 1;
-        }
-        //}
-
-        r_offset += E;
-
-        /*for (int k=0;k<8;k++)
-          {
-          printf("output decoder [%d] =  0x%02x \n", k, harq_process->c[r][k]);
-          printf("llrprocbuf [%d] =  %x adr %p\n", k, llrProcBuf[k], llrProcBuf+k);
-          }
-        */
+      if (check_crc((uint8_t *)llrProcBuf, length_dec, crc_type)) {
+        PRINT_CRC_CHECK(LOG_I(PHY, "Segment %d CRC OK\n", r));
+        decodeIterations = 2;
       } else {
-        dtx_det = 0;
+        PRINT_CRC_CHECK(LOG_I(PHY, "segment %d CRC NOK\n", r));
         decodeIterations = ulsch->max_ldpc_iterations + 1;
       }
+
+      r_offset += E;
+
       bool decodeSuccess = (decodeIterations <= ulsch->max_ldpc_iterations);
       if (decodeSuccess) {
         memcpy(harq_process->b + offset, harq_process->c[r], Kr_bytes - (harq_process->F >> 3) - ((harq_process->C > 1) ? 3 : 0));
@@ -504,7 +497,6 @@ int nr_ulsch_decoding(PHY_VARS_gNB *phy_vars_gNB,
   }
 
   else {
-    dtx_det = 0;
     set_abort(&harq_process->abort_decode, false);
     for (int r = 0; r < harq_process->C; r++) {
       int E = nr_get_E(G, harq_process->C, Qm, n_layers, r);

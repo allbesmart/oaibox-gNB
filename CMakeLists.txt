@@ -482,6 +482,19 @@ if (ENABLE_LDPC_T1)
   target_link_libraries(ldpc_t1 ${LIBDPDK_T1_LDFLAGS} ${T1})
 endif()
 
+add_boolean_option(ENABLE_LDPC_T2 True "Build support for LDPC Offload to T2 library" ON)
+if (ENABLE_LDPC_T2)
+  pkg_check_modules(LIBDPDK_T2 REQUIRED libdpdk=20.11.3)
+  find_library(T2 NAMES rte_baseband_accl_ldpc REQUIRED)
+  if (NOT T2)
+    message(FATAL_ERROR "Library rte_baseband_accl_ldpc for T2 offload not found")
+  endif()
+  add_library(ldpc_t2 MODULE ${OPENAIR1_DIR}/PHY/CODING/nrLDPC_decoder/nrLDPC_decoder_offload.c)
+  set_target_properties(ldpc_t2 PROPERTIES COMPILE_FLAGS "-DALLOW_EXPERIMENTAL_API")
+  target_compile_options(ldpc_t2 PRIVATE ${LIBDPDK_T2_CFLAGS})
+  target_link_libraries(ldpc_t2 ${LIBDPDK_T2_LDFLAGS} ${T2})
+endif()
+
 ##########################################################
 
 include_directories ("${OPENAIR_DIR}/radio/COMMON")
@@ -2073,6 +2086,10 @@ if (ENABLE_LDPC_T1)
   add_dependencies(nr-softmodem ldpc_t1)
 endif()
 
+if (ENABLE_LDPC_T2)
+  add_dependencies(nr-softmodem ldpc_t2)
+endif()
+
 # force the generation of ASN.1 so that we don't need to wait during the build
 target_link_libraries(nr-softmodem PRIVATE
   asn1_lte_rrc asn1_nr_rrc asn1_s1ap asn1_ngap asn1_m2ap asn1_m3ap asn1_x2ap asn1_f1ap asn1_lpp)
@@ -2288,6 +2305,10 @@ add_executable(nr_ulsim
 
 if (ENABLE_LDPC_T1)
   add_dependencies(nr_ulsim ldpc_t1)
+endif()
+
+if (ENABLE_LDPC_T2)
+  add_dependencies(nr_ulsim ldpc_t2)
 endif()
 
 target_link_libraries(nr_ulsim PRIVATE

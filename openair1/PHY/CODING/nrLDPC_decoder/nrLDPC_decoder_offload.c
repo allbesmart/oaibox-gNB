@@ -55,19 +55,6 @@
 #define MAX_QUEUES RTE_MAX_LCORE
 #define TEST_REPETITIONS 1 
 
-#ifdef RTE_LIBRTE_PMD_BBDEV_FPGA_LTE_FEC
-#include <fpga_lte_fec.h>
-#define FPGA_LTE_PF_DRIVER_NAME ("intel_fpga_lte_fec_pf")
-#define FPGA_LTE_VF_DRIVER_NAME ("intel_fpga_lte_fec_vf")
-#define VF_UL_4G_QUEUE_VALUE 4
-#define VF_DL_4G_QUEUE_VALUE 4
-#define UL_4G_BANDWIDTH 3
-#define DL_4G_BANDWIDTH 3
-#define UL_4G_LOAD_BALANCE 128
-#define DL_4G_LOAD_BALANCE 128
-#define FLR_4G_TIMEOUT 610
-#endif
-
 #ifdef RTE_LIBRTE_PMD_BBDEV_FPGA_5GNR_FEC
 #include <rte_pmd_fpga_5gnr_fec.h>
 #define FPGA_5GNR_PF_DRIVER_NAME ("intel_fpga_5gnr_fec_pf")
@@ -362,64 +349,17 @@ add_dev(uint8_t dev_id, struct rte_bbdev_info *info)
 	unsigned int nb_queues;
 	enum rte_bbdev_op_type op_type = RTE_BBDEV_OP_LDPC_DEC; 
 
-/* Configure fpga lte fec with PF & VF values
- * if '-i' flag is set and using fpga device
- */
-#ifdef RTE_LIBRTE_PMD_BBDEV_FPGA_LTE_FEC
-	if ((get_init_device() == true) &&
-		(!strcmp(info->drv.driver_name, FPGA_LTE_PF_DRIVER_NAME))) {
-		struct fpga_lte_fec_conf conf;
-		unsigned int i;
-
-		printf("Configure FPGA LTE FEC Driver %s with default values\n",
-				info->drv.driver_name);
-
-		/* clear default configuration before initialization */
-		memset(&conf, 0, sizeof(struct fpga_lte_fec_conf));
-
-		/* Set PF mode :
-		 * true if PF is used for data plane
-		 * false for VFs
-		 */
-		conf.pf_mode_en = true;
-
-		for (i = 0; i < FPGA_LTE_FEC_NUM_VFS; ++i) {
-			/* Number of UL queues per VF (fpga supports 8 VFs) */
-			conf.vf_ul_queues_number[i] = VF_UL_4G_QUEUE_VALUE;
-			/* Number of DL queues per VF (fpga supports 8 VFs) */
-			conf.vf_dl_queues_number[i] = VF_DL_4G_QUEUE_VALUE;
-		}
-
-		/* UL bandwidth. Needed for schedule algorithm */
-		conf.ul_bandwidth = UL_4G_BANDWIDTH;
-		/* DL bandwidth */
-		conf.dl_bandwidth = DL_4G_BANDWIDTH;
-
-		/* UL & DL load Balance Factor to 64 */
-		conf.ul_load_balance = UL_4G_LOAD_BALANCE;
-		conf.dl_load_balance = DL_4G_LOAD_BALANCE;
-
-		/**< FLR timeout value */
-		conf.flr_time_out = FLR_4G_TIMEOUT;
-
-		/* setup FPGA PF with configuration information */
-		ret = fpga_lte_fec_configure(info->dev_name, &conf);
-		TEST_ASSERT_SUCCESS(ret,
-				"Failed to configure 4G FPGA PF for bbdev %s",
-				info->dev_name);
-	}
-#endif
 #ifdef RTE_LIBRTE_PMD_BBDEV_FPGA_5GNR_FEC
 	if ((get_init_device() == true) &&
 		(!strcmp(info->drv.driver_name, FPGA_5GNR_PF_DRIVER_NAME))) {
-		struct fpga_5gnr_fec_conf conf;
+		struct rte_fpga_5gnr_fec_conf conf;
 		unsigned int i;
 
 		printf("Configure FPGA 5GNR FEC Driver %s with default values\n",
 				info->drv.driver_name);
 
 		/* clear default configuration before initialization */
-		memset(&conf, 0, sizeof(struct fpga_5gnr_fec_conf));
+		memset(&conf, 0, sizeof(struct rte_fpga_5gnr_fec_conf));
 
 		/* Set PF mode :
 		 * true if PF is used for data plane
@@ -447,7 +387,7 @@ add_dev(uint8_t dev_id, struct rte_bbdev_info *info)
 		conf.flr_time_out = FLR_5G_TIMEOUT;
 
 		/* setup FPGA PF with configuration information */
-		ret = fpga_5gnr_fec_configure(info->dev_name, &conf);
+		ret = rte_fpga_5gnr_fec_configure(info->dev_name, &conf);
 		TEST_ASSERT_SUCCESS(ret,
 				"Failed to configure 5G FPGA PF for bbdev %s",
 				info->dev_name);
@@ -1260,7 +1200,7 @@ start_pmd_dec(struct active_device *ad,
 	t_params[0].harq_pid = harq_pid;
 	t_params[0].ulsch_id = ulsch_id;
 
-	RTE_LCORE_FOREACH_SLAVE(lcore_id) {
+	RTE_LCORE_FOREACH_WORKER(lcore_id) {
 		if (used_cores >= num_lcores)
 			break;
 		t_params[used_cores].dev_id = ad->dev_id;
@@ -1412,7 +1352,7 @@ int32_t nrLDPC_decod_offload(t_nrLDPC_dec_params* p_decParams, uint8_t harq_pid,
 {
     	t_nrLDPCoffload_params offloadParams;
     	t_nrLDPCoffload_params* p_offloadParams    = &offloadParams;
-    	uint64_t start=rte_rdtsc_precise();
+    	//uint64_t start=rte_rdtsc_precise();
 	/*uint64_t start_time;//=rte_rdtsc_precise();
 	uint64_t start_time1; //=rte_rdtsc_precise();
 	uint64_t total_time=0, total_time1=0;*/
@@ -1421,36 +1361,28 @@ int32_t nrLDPC_decod_offload(t_nrLDPC_dec_params* p_decParams, uint8_t harq_pid,
 	/*uint64_t start_time_init;
 	  uint64_t total_time_init=0;*/
 
-	/*
-	int argc_re=2;
-	char *argv_re[2];
-	argv_re[0] = "/home/eurecom/hongzhi/dpdk-20.05orig/build/app/testbbdev";
-	argv_re[1] = "--";
-	*/
-	
-	int argc_re=7;
-        char *argv_re[7];
-        argv_re[0] = "/home/eurecom/hongzhi/dpdk-20.05orig/build/app/testbbdev";
-        argv_re[1] = "-l";
-        argv_re[2] = "31";
-        argv_re[3] = "-w";
-        argv_re[4] = "b0:00.0";
-        argv_re[5] = "--file-prefix=b6";
-        argv_re[6] = "--";
-	
-	test_params.num_ops=1; 
-	test_params.burst_sz=1;
-	test_params.num_lcores=1;		
-	test_params.num_tests = 1;
-	struct active_device *ad;
-        ad = &active_devs[0];
+  int argc_re = 6;
+  char *argv_re[6];
+  argv_re[0] = "~/dpdk-stable/build/app";
+  argv_re[1] = "-a";
+  argv_re[2] = "0000:01:00.0";
+  argv_re[3] = "--";
+  argv_re[4] = "-l";
+  argv_re[5] = "1-4";
 
-	int socket_id=0;
-        int i,f_ret;
-        struct rte_bbdev_info info;
-        enum rte_bbdev_op_type op_type = RTE_BBDEV_OP_LDPC_DEC;
-	
-	switch (mode) {
+  test_params.num_ops = 1;
+  test_params.burst_sz = 1;
+  test_params.num_lcores = 1;
+  test_params.num_tests = 1;
+  struct active_device *ad;
+  ad = &active_devs[0];
+
+  int socket_id = 0;
+  int i, f_ret;
+  struct rte_bbdev_info info;
+  enum rte_bbdev_op_type op_type = RTE_BBDEV_OP_LDPC_DEC;
+
+  switch (mode) {
 	case 0:	
           ret = rte_eal_init(argc_re, argv_re);
           if (ret<0) {
