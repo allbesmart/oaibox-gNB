@@ -103,6 +103,7 @@ typedef struct {
   volatile int length;
   pthread_mutex_t m;
   pthread_cond_t c;
+  int bytes_stored;
 } rlc_data_req_queue;
 
 static rlc_data_req_queue q;
@@ -134,6 +135,8 @@ static void *rlc_data_req_thread(void *_)
 
     q.length--;
     q.start = (q.start + 1) % RLC_DATA_REQ_QUEUE_SIZE;
+
+    q.bytes_stored -= q.q[i].sdu_sizeP;
 
     if (pthread_cond_signal(&q.c) != 0) abort();
     if (pthread_mutex_unlock(&q.m) != 0) abort();
@@ -177,6 +180,8 @@ static void enqueue_rlc_data_req(const protocol_ctxt_t *const ctxt_pP,
   i = (q.start + q.length) % RLC_DATA_REQ_QUEUE_SIZE;
   q.length++;
 
+  q.bytes_stored += sdu_sizeP;
+
   q.q[i].ctxt_pP    = *ctxt_pP;
   q.q[i].srb_flagP  = srb_flagP;
   q.q[i].MBMS_flagP = MBMS_flagP;
@@ -206,6 +211,21 @@ void du_rlc_data_req(const protocol_ctxt_t *const ctxt_pP,
                        confirmP,
                        sdu_sizeP,
                        sdu_pP);
+}
+
+static int rlc_data_queue_occupancy(void)
+{
+  int ret;
+
+  /* no queue for CU */
+  if (NODE_IS_CU(node_type))
+    return 0;
+
+  if (pthread_mutex_lock(&q.m) != 0) abort();
+  ret = q.bytes_stored;
+  if (pthread_mutex_unlock(&q.m) != 0) abort();
+
+  return ret;
 }
 
 /****************************************************************************/
@@ -1033,7 +1053,12 @@ bool nr_pdcp_data_req_srb(ue_id_t ue_id,
   LOG_D(PDCP, "%s() called, size %d\n", __func__, sdu_buffer_size);
   nr_pdcp_ue_t *ue;
   nr_pdcp_entity_t *rb;
+  int rlc_rnti;
+  int rlc_channel_id;
+  int rlc_tx_freesize = -1;
+  bool rlc_tx_freesize_updated = false;
 
+try_to_process_again:
   nr_pdcp_manager_lock(nr_pdcp_ue_manager);
 
   ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
@@ -1051,12 +1076,40 @@ bool nr_pdcp_data_req_srb(ue_id_t ue_id,
 
   int max_size = sdu_buffer_size + 3 + 4; // 3: max header, 4: max integrity
   char pdu_buf[max_size];
+  if (rlc_tx_freesize != -1)
+    rb->rlc_tx_freesize = rlc_tx_freesize;
   int pdu_size = rb->process_sdu(rb, (char *)sdu_buffer, sdu_buffer_size, muiP, pdu_buf, max_size);
+  rlc_rnti = rb->rlc_rnti;
+  rlc_channel_id = rb->rlc_channel_id;
   AssertFatal(rb->deliver_pdu == NULL, "SRB callback should be NULL, to be provided on every invocation\n");
+
+  if (pdu_size == -1 && rlc_tx_freesize_updated) {
+    /* update stats of dropped SDUs */
+    rb->dropped_sdus++;
+    rb->dropped_bytes += sdu_buffer_size;
+  }
 
   nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
 
-  deliver_pdu_cb(data, ue_id, rb_id, pdu_buf, pdu_size, muiP);
+  /* nr_rlc_get_available_tx_space() should be called by rb->process_sdu()
+   * but because the RLC lock must not be acquired when the PDCP lock is acquired,
+   * we need to call it here and have this logic of calling rb->process_sdu()
+   * a second time if the first call failed.
+   * If the locking logic changes, this may need to be changed.
+   * (And the update of stats of dropped SDUs will then need to be changed
+   * too, not done here anymore.)
+   */
+  if (pdu_size == -1 && !rlc_tx_freesize_updated && rlc_rnti != -1) {
+    rlc_tx_freesize = nr_rlc_get_available_tx_space(rlc_rnti, rlc_channel_id)
+                      - rlc_data_queue_occupancy();
+    if (rlc_tx_freesize < 0)
+      rlc_tx_freesize = 0;
+    rlc_tx_freesize_updated = true;
+    goto try_to_process_again;
+  }
+
+  if (pdu_size != -1)
+    deliver_pdu_cb(data, ue_id, rb_id, pdu_buf, pdu_size, muiP);
 
   return 1;
 }
@@ -1111,6 +1164,10 @@ bool nr_pdcp_data_req_drb(protocol_ctxt_t *ctxt_pP,
   nr_pdcp_ue_t *ue;
   nr_pdcp_entity_t *rb;
   ue_id_t ue_id = ctxt_pP->rntiMaybeUEid;
+  int rlc_rnti;
+  int rlc_channel_id;
+  int rlc_tx_freesize = -1;
+  bool rlc_tx_freesize_updated = false;
 
   if (ctxt_pP->module_id != 0 ||
       //ctxt_pP->enb_flag != 1 ||
@@ -1122,6 +1179,7 @@ bool nr_pdcp_data_req_drb(protocol_ctxt_t *ctxt_pP,
     exit(1);
   }
 
+try_to_process_again:
   nr_pdcp_manager_lock(nr_pdcp_ue_manager);
 
   ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
@@ -1139,12 +1197,40 @@ bool nr_pdcp_data_req_drb(protocol_ctxt_t *ctxt_pP,
 
   int max_size = sdu_buffer_size + 3 + 4; // 3: max header, 4: max integrity
   char pdu_buf[max_size];
+  if (rlc_tx_freesize != -1)
+    rb->rlc_tx_freesize = rlc_tx_freesize;
   int pdu_size = rb->process_sdu(rb, (char *)sdu_buffer, sdu_buffer_size, muiP, pdu_buf, max_size);
+  rlc_rnti = rb->rlc_rnti;
+  rlc_channel_id = rb->rlc_channel_id;
   deliver_pdu deliver_pdu_cb = rb->deliver_pdu;
+
+  if (pdu_size == -1 && rlc_tx_freesize_updated) {
+    /* update stats of dropped SDUs */
+    rb->dropped_sdus++;
+    rb->dropped_bytes += sdu_buffer_size;
+  }
 
   nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
 
-  deliver_pdu_cb(NULL, ue_id, rb_id, pdu_buf, pdu_size, muiP);
+  /* nr_rlc_get_available_tx_space() should be called by rb->process_sdu()
+   * but because the RLC lock must not be acquired when then PDCP lock is acquired,
+   * we need to call it here and have this logic of calling rb->process_sdu()
+   * a second time if the first call failed.
+   * If the locking logic changes, this may need to be changed.
+   * (And the update of stats of dropped SDUs will then need to be changed
+   * too, not done here anymore.)
+   */
+  if (pdu_size == -1 && !rlc_tx_freesize_updated && rlc_rnti != -1) {
+    rlc_tx_freesize = nr_rlc_get_available_tx_space(rlc_rnti, rlc_channel_id)
+                      - rlc_data_queue_occupancy();
+    if (rlc_tx_freesize < 0)
+      rlc_tx_freesize = 0;
+    rlc_tx_freesize_updated = true;
+    goto try_to_process_again;
+  }
+
+  if (pdu_size != -1)
+    deliver_pdu_cb(NULL, ue_id, rb_id, pdu_buf, pdu_size, muiP);
 
   return 1;
 }
@@ -1257,4 +1343,33 @@ const bool nr_pdcp_get_statistics(ue_id_t ue_id, int srb_flag, int rb_id, nr_pdc
   nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
 
   return ret;
+}
+
+void nr_pdcp_set_rlc_ids(ue_id_t ue_id, bool srb_flag, int rb_id, int rlc_rnti, int rlc_channel_id)
+{
+  nr_pdcp_ue_t     *ue;
+  nr_pdcp_entity_t *rb;
+
+  nr_pdcp_manager_lock(nr_pdcp_ue_manager);
+  ue = nr_pdcp_manager_get_ue(nr_pdcp_ue_manager, ue_id);
+
+  if (srb_flag) {
+    if (rb_id < 1 || rb_id > 2)
+      rb = NULL;
+    else
+      rb = ue->srb[rb_id - 1];
+  } else {
+    if (rb_id < 1 || rb_id > 5)
+      rb = NULL;
+    else
+      rb = ue->drb[rb_id - 1];
+  }
+
+  if (rb != NULL) {
+    nr_pdcp_entity_set_rlc_ids(rb, rlc_rnti, rlc_channel_id);
+  } else {
+    LOG_E(PDCP, "ue %"PRIx64" not found\n", ue_id);
+  }
+
+  nr_pdcp_manager_unlock(nr_pdcp_ue_manager);
 }
