@@ -1309,52 +1309,54 @@ void NFAPI_NR_DMRS_TYPE1_linear_interp(NR_DL_FRAME_PARMS *frame_parms,
                                        c16_t *dl_ch,
                                        unsigned short bwp_start_subcarrier,
                                        unsigned short nb_rb_pdsch,
-                                       int8_t delta)
+                                       int8_t delta,
+                                       delay_t *delay,
+                                       uint32_t *nvar)
 {
-  int re_offset = bwp_start_subcarrier % frame_parms->ofdm_symbol_size;
-  c16_t *pil0 = pil;
   c16_t *dl_ch0 = dl_ch;
-  c16_t ch = {0};
+  int re_offset = bwp_start_subcarrier % frame_parms->ofdm_symbol_size;
 
-  const int16_t *fdcl = NULL;
-  const int16_t *fdcr = NULL;
-  const int16_t *fdclh = NULL;
-  const int16_t *fdcrh = NULL;
-  switch (delta) {
-    case 0: // port 0,1
-      fdcl = filt8_dcl0; // left DC interpolation Filter (even RB)
-      fdcr = filt8_dcr0; // right DC interpolation Filter (even RB)
-      fdclh = filt8_dcl0_h; // left DC interpolation Filter (odd RB)
-      fdcrh = filt8_dcr0_h; // right DC interpolation Filter (odd RB)
-      break;
+  c16_t dl_ls_est[frame_parms->ofdm_symbol_size] __attribute__((aligned(32)));
+  memset(dl_ls_est, 0, sizeof(dl_ls_est));
 
-    case 1: // port2,3
-      fdcl = filt8_dcl1;
-      fdcr = filt8_dcr1;
-      fdclh = filt8_dcl1_h;
-      fdcrh = filt8_dcr1_h;
-      break;
-
-    default:
-      AssertFatal(1 == 0, "pdsch_channel_estimation: Invalid delta %i\n", delta);
-      break;
-  }
+  int nest_count = 0;
+  uint64_t noise_amp2 = 0;
 
   for (int pilot_cnt = 0; pilot_cnt < 6 * nb_rb_pdsch; pilot_cnt++) {
     if (pilot_cnt % 2 == 0) {
-      ch = c16mulShift(*pil, rxF[re_offset], 15);
+      c16_t ch = c16mulShift(*pil, rxF[re_offset], 15);
       pil++;
       re_offset = (re_offset + 2) % frame_parms->ofdm_symbol_size;
       ch = c16maddShift(*pil, rxF[re_offset], ch, 15);
       ch = c16Shift(ch, 1);
       pil++;
       re_offset = (re_offset + 2) % frame_parms->ofdm_symbol_size;
+      for (int k = pilot_cnt << 1; k < (pilot_cnt << 1) + 4; k++) {
+        dl_ls_est[k] = ch;
+      }
     }
 
 #ifdef DEBUG_PDSCH
-    printf("pilot %3d: pil -> (%6d,%6d), rxF -> (%4d,%4d), ch -> (%4d,%4d) \n", pilot_cnt, pil->r, pil->i, rxF[re_offset].r, rxF[re_offset].i, ch.r, ch.i);
+    printf("pilot %3d: pil -> (%6d,%6d), rxF -> (%4d,%4d), ch -> (%4d,%4d) \n",
+           pilot_cnt,
+           pil->r,
+           pil->i,
+           rxF[re_offset].r,
+           rxF[re_offset].i,
+           dl_ls_est[pilot_cnt << 1].r,
+           dl_ls_est[pilot_cnt << 1].i);
 #endif
+  }
 
+  c16_t ch_estimates_time[frame_parms->ofdm_symbol_size] __attribute__((aligned(32)));
+  memset(ch_estimates_time, 0, sizeof(ch_estimates_time));
+  nr_est_delay(frame_parms->ofdm_symbol_size, dl_ls_est, ch_estimates_time, delay);
+  int delay_idx = get_delay_idx(delay->est_delay, MAX_DELAY_COMP);
+  c16_t *dl_delay_table = frame_parms->delay_table[delay_idx];
+
+  for (int pilot_cnt = 0; pilot_cnt < 6 * nb_rb_pdsch; pilot_cnt++) {
+    int k = pilot_cnt << 1;
+    c16_t ch = c16mulShift(dl_ls_est[k], dl_delay_table[k], 8);
     if (pilot_cnt == 0) { // Treat first pilot
       c16multaddVectRealComplex(filt16_ul_p0, &ch, dl_ch, 16);
     } else if (pilot_cnt == 1 || pilot_cnt == 2) {
@@ -1369,45 +1371,18 @@ void NFAPI_NR_DMRS_TYPE1_linear_interp(NR_DL_FRAME_PARMS *frame_parms,
     }
   }
 
-  // check if PRB crosses DC and improve estimates around DC
-  if ((bwp_start_subcarrier < frame_parms->ofdm_symbol_size) && (bwp_start_subcarrier + nb_rb_pdsch * 12 >= frame_parms->ofdm_symbol_size)) {
-    dl_ch = dl_ch0;
-    uint16_t idxDC = 2 * (frame_parms->ofdm_symbol_size - bwp_start_subcarrier);
-    uint16_t idxPil = idxDC / 4;
-    re_offset = bwp_start_subcarrier % frame_parms->ofdm_symbol_size;
-    pil = pil0;
-    pil += (idxPil - 1);
-    dl_ch += (idxDC / 2 - 2);
-    dl_ch = memset(dl_ch, 0, sizeof(c16_t) * 5);
-    re_offset = (re_offset + idxDC / 2 - 2) % frame_parms->ofdm_symbol_size;
-    ch = c16mulShift(*pil, rxF[re_offset], 15);
-    pil++;
-    re_offset = (re_offset + 2) % frame_parms->ofdm_symbol_size;
-    ch = c16maddShift(*pil, rxF[re_offset], ch, 15);
-    ch = c16Shift(ch, 1);
+  // Revert delay
+  dl_ch = dl_ch0;
+  int inv_delay_idx = get_delay_idx(-delay->est_delay, MAX_DELAY_COMP);
+  c16_t *dl_inv_delay_table = frame_parms->delay_table[inv_delay_idx];
+  for (int k = 0; k < 12 * nb_rb_pdsch; k++) {
+    dl_ch[k] = c16mulShift(dl_ch[k], dl_inv_delay_table[k], 8);
+    noise_amp2 += c16amp2(c16sub(dl_ls_est[k], dl_ch[k]));
+    nest_count++;
+  }
 
-    // for proper allignment of SIMD vectors
-    if ((frame_parms->N_RB_DL & 1) == 0) {
-      c16multaddVectRealComplex(fdcl, &ch, dl_ch - 2, 8);
-      pil++;
-      re_offset = (re_offset + 2) % frame_parms->ofdm_symbol_size;
-      ch = c16mulShift(*pil, rxF[re_offset], 15);
-      pil++;
-      re_offset = (re_offset + 2) % frame_parms->ofdm_symbol_size;
-      ch = c16maddShift(*pil, rxF[re_offset], ch, 15);
-      ch = c16Shift(ch, 1);
-      c16multaddVectRealComplex(fdcr, &ch, dl_ch - 2, 8);
-    } else {
-      c16multaddVectRealComplex(fdclh, &ch, dl_ch, 8);
-      pil++;
-      re_offset = (re_offset + 2) % frame_parms->ofdm_symbol_size;
-      ch = c16mulShift(*pil, rxF[re_offset], 15);
-      pil++;
-      re_offset = (re_offset + 2) % frame_parms->ofdm_symbol_size;
-      ch = c16maddShift(*pil, rxF[re_offset], ch, 15);
-      ch = c16Shift(ch, 1);
-      c16multaddVectRealComplex(fdcrh, &ch, dl_ch, 8);
-    }
+  if (nvar && nest_count > 0) {
+    *nvar = (uint32_t)(noise_amp2 / (nest_count * frame_parms->nb_antennas_rx));
   }
 }
 
@@ -1503,75 +1478,73 @@ void NFAPI_NR_DMRS_TYPE2_linear_interp(NR_DL_FRAME_PARMS *frame_parms,
                                        unsigned short bwp_start_subcarrier,
                                        unsigned short nb_rb_pdsch,
                                        int8_t delta,
-                                       unsigned short p)
+                                       unsigned short p,
+                                       delay_t *delay,
+                                       uint32_t *nvar)
 {
   int re_offset = bwp_start_subcarrier % frame_parms->ofdm_symbol_size;
   c16_t *dl_ch0 = dl_ch;
-  c16_t ch = {0};
-  c16_t ch_l = {0};
-  c16_t ch_r = {0};
+
+  c16_t dl_ls_est[frame_parms->ofdm_symbol_size] __attribute__((aligned(32)));
+  memset(dl_ls_est, 0, sizeof(dl_ls_est));
+
+  int nest_count = 0;
+  uint64_t noise_amp2 = 0;
 
   for (int pilot_cnt = 0; pilot_cnt < 4 * nb_rb_pdsch; pilot_cnt += 2) {
-    ch_l = c16mulShift(*pil, rxF[re_offset], 15);
+    c16_t ch_l = c16mulShift(*pil, rxF[re_offset], 15);
 #ifdef DEBUG_PDSCH
     printf("pilot %3d: pil -> (%6d,%6d), rxF -> (%4d,%4d), ch -> (%4d,%4d) \n", pilot_cnt, pil->r, pil->i, rxF[re_offset].r, rxF[re_offset].i, ch_l.r, ch_l.i);
 #endif
     pil++;
     re_offset = (re_offset + 1) % frame_parms->ofdm_symbol_size;
-    ch_r = c16mulShift(*pil, rxF[re_offset], 15);
+    c16_t ch_r = c16mulShift(*pil, rxF[re_offset], 15);
 #ifdef DEBUG_PDSCH
     printf("pilot %3d: pil -> (%6d,%6d), rxF -> (%4d,%4d), ch -> (%4d,%4d) \n", pilot_cnt, pil->r, pil->i, rxF[re_offset].r, rxF[re_offset].i, ch_r.r, ch_r.i);
 #endif
-    ch = c16addShift(ch_l, ch_r, 1);
-    if (pilot_cnt == 1) {
-      multadd_real_vector_complex_scalar(filt16_dl_first_type2, (int16_t *)&ch, (int16_t *)dl_ch, 16);
-      dl_ch += 3;
-    } else if (pilot_cnt == (4 * nb_rb_pdsch - 1)) {
-      multadd_real_vector_complex_scalar(filt16_dl_last_type2, (int16_t *)&ch, (int16_t *)dl_ch, 16);
-    } else {
-      multadd_real_vector_complex_scalar(filt16_dl_middle_type2, (int16_t *)&ch, (int16_t *)dl_ch, 16);
-      dl_ch += 6;
+    c16_t ch = c16addShift(ch_l, ch_r, 1);
+    for (int k = 3 * pilot_cnt; k < (3 * pilot_cnt) + 6; k++) {
+      dl_ls_est[k] = ch;
     }
     pil++;
     re_offset = (re_offset + 5) % frame_parms->ofdm_symbol_size;
   }
 
-  // check if PRB crosses DC and improve estimates around DC
-  if ((bwp_start_subcarrier < frame_parms->ofdm_symbol_size) && (bwp_start_subcarrier + nb_rb_pdsch * 12 >= frame_parms->ofdm_symbol_size) && (p < 2)) {
-    dl_ch = dl_ch0;
-    uint16_t idxDC = 2 * (frame_parms->ofdm_symbol_size - bwp_start_subcarrier);
-    dl_ch += (idxDC / 2 - 4);
-    dl_ch = memset(dl_ch, 0, sizeof(c16_t) * 10);
+  c16_t ch_estimates_time[frame_parms->ofdm_symbol_size] __attribute__((aligned(32)));
+  memset(ch_estimates_time, 0, sizeof(ch_estimates_time));
+  nr_est_delay(frame_parms->ofdm_symbol_size, dl_ls_est, ch_estimates_time, delay);
+  int delay_idx = get_delay_idx(delay->est_delay, MAX_DELAY_COMP);
+  c16_t *dl_delay_table = frame_parms->delay_table[delay_idx];
 
-    dl_ch--;
-    ch_r = *dl_ch;
-    dl_ch += 11;
-    ch_l = *dl_ch;
-
-    // for proper allignment of SIMD vectors
-    if ((frame_parms->N_RB_DL & 1) == 0) {
-      dl_ch -= 10;
-      // Interpolate fdcrl1 with ch_r
-      c16multaddVectRealComplex(filt8_dcrl1, &ch_r, dl_ch, 8);
-      // Interpolate fdclh1 with ch_l
-      c16multaddVectRealComplex(filt8_dclh1, &ch_l, dl_ch, 8);
-      dl_ch += 8;
-      // Interpolate fdcrh1 with ch_r
-      c16multaddVectRealComplex(filt8_dcrh1, &ch_r, dl_ch, 8);
-      // Interpolate fdcll1 with ch_l
-      c16multaddVectRealComplex(filt8_dcll1, &ch_l, dl_ch, 8);
-    } else {
-      dl_ch -= 14;
-      // Interpolate fdcrl1 with ch_r
-      c16multaddVectRealComplex(filt8_dcrl2, &ch_r, dl_ch, 8);
-      // Interpolate fdclh1 with ch_l
-      c16multaddVectRealComplex(filt8_dclh2, &ch_l, dl_ch, 8);
-      dl_ch += 8;
-      // Interpolate fdcrh1 with ch_r
-      c16multaddVectRealComplex(filt8_dcrh2, &ch_r, dl_ch, 8);
-      // Interpolate fdcll1 with ch_l
-      c16multaddVectRealComplex(filt8_dcll2, &ch_l, dl_ch, 8);
+  for (int pilot_cnt = 0; pilot_cnt < 6 * nb_rb_pdsch; pilot_cnt++) {
+    int k = (pilot_cnt / 3) * 6;
+    c16_t ch = c16mulShift(dl_ls_est[k], dl_delay_table[k], 8);
+    if (pilot_cnt == 0) { // Treat first pilot
+      c16multaddVectRealComplex(filt16_ul_p0, &ch, dl_ch, 16);
+    } else if (pilot_cnt == 1 || pilot_cnt == 2) {
+      c16multaddVectRealComplex(filt16_ul_p1p2, &ch, dl_ch, 16);
+    } else if (pilot_cnt == 6 * nb_rb_pdsch - 1) { // Treat last pilot
+      c16multaddVectRealComplex(filt16_ul_last, &ch, dl_ch, 16);
+    } else { // Treat middle pilots
+      c16multaddVectRealComplex(filt16_ul_middle, &ch, dl_ch, 16);
+      if (pilot_cnt % 2 == 0) {
+        dl_ch += 4;
+      }
     }
+  }
+
+  // Revert delay
+  dl_ch = dl_ch0;
+  int inv_delay_idx = get_delay_idx(-delay->est_delay, MAX_DELAY_COMP);
+  c16_t *dl_inv_delay_table = frame_parms->delay_table[inv_delay_idx];
+  for (int k = 0; k < 12 * nb_rb_pdsch; k++) {
+    dl_ch[k] = c16mulShift(dl_ch[k], dl_inv_delay_table[k], 8);
+    noise_amp2 += c16amp2(c16sub(dl_ls_est[k], dl_ch[k]));
+    nest_count++;
+  }
+
+  if (nvar && nest_count > 0) {
+    *nvar = (uint32_t)(noise_amp2 / (nest_count * frame_parms->nb_antennas_rx));
   }
 }
 
@@ -1673,7 +1646,8 @@ int nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
                                 uint32_t pdsch_est_size,
                                 int32_t dl_ch_estimates[][pdsch_est_size],
                                 int rxdataFsize,
-                                c16_t rxdataF[][rxdataFsize])
+                                c16_t rxdataF[][rxdataFsize],
+                                uint32_t *nvar)
 {
   int gNB_id = proc->gNB_id;
   int Ns = proc->nr_slot_rx;
@@ -1715,6 +1689,8 @@ int nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
       ue->frame_parms.nushift = nushift;
   }
 
+  delay_t delay = {0};
+
   for (int aarx = 0; aarx < ue->frame_parms.nb_antennas_rx; aarx++) {
 
 #ifdef DEBUG_PDSCH
@@ -1734,7 +1710,9 @@ int nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
                                         dl_ch,
                                         bwp_start_subcarrier,
                                         nb_rb_pdsch,
-                                        delta);
+                                        delta,
+                                        &delay,
+                                        nvar);
 
     } else if (config_type == NFAPI_NR_DMRS_TYPE2 && ue->chest_freq == 0) {
       NFAPI_NR_DMRS_TYPE2_linear_interp(&ue->frame_parms,
@@ -1744,7 +1722,9 @@ int nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
                                         bwp_start_subcarrier,
                                         nb_rb_pdsch,
                                         delta,
-                                        p);
+                                        p,
+                                        &delay,
+                                        nvar);
 
     } else if (config_type == NFAPI_NR_DMRS_TYPE1) {
       NFAPI_NR_DMRS_TYPE1_average_prb(&ue->frame_parms,

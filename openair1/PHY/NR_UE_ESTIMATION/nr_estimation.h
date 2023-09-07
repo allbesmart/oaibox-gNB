@@ -93,7 +93,8 @@ int nr_pdsch_channel_estimation(PHY_VARS_NR_UE *ue,
                                 uint32_t pdsch_est_size,
                                 int32_t dl_ch_estimates[][pdsch_est_size],
                                 int rxdataFsize,
-                                c16_t rxdataF[][rxdataFsize]);
+                                c16_t rxdataF[][rxdataFsize],
+                                uint32_t *nvar);
 
 void nr_adjust_synch_ue(NR_DL_FRAME_PARMS *frame_parms,
                         PHY_VARS_NR_UE *ue,
