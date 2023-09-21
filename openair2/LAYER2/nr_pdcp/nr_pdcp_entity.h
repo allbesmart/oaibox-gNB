@@ -152,6 +152,16 @@ typedef struct nr_pdcp_entity_t {
   int           rx_maxsize;
   nr_pdcp_statistics_t stats;
 
+  /* RLC TX buffer size estimation */
+  bool do_drop;           /* dropping is optional */
+  /* PDCP entity drops a packet if its size is > rlc_tx_freesize */
+  int rlc_tx_freesize;
+  int rlc_rnti;           /* set to -1 if unknown (think CU entity) */
+  int rlc_channel_id;
+  uint64_t dropped_sdus;
+  uint64_t dropped_bytes;
+  uint64_t dropped_lastlog_time;
+
   // WARNING: This is a hack!
   // 3GPP TS 38.331 (RRC) version 15.3 
   // Section 5.3.4.3 Reception of the SecurityModeCommand by the UE 
@@ -186,5 +196,7 @@ nr_pdcp_entity_t *new_nr_pdcp_entity(
     int integrity_algorithm,
     unsigned char *ciphering_key,
     unsigned char *integrity_key);
+
+void nr_pdcp_entity_set_rlc_ids(nr_pdcp_entity_t *entity, int rlc_rnti, int rlc_channel_id);
 
 #endif /* _NR_PDCP_ENTITY_H_ */

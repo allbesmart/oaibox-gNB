@@ -31,6 +31,7 @@
 #include "nr_pdcp_sdu.h"
 
 #include "LOG/log.h"
+#include "executables/softmodem-common.h"
 
 static void nr_pdcp_entity_recv_pdu(nr_pdcp_entity_t *entity,
                                     char *_buffer, int size)
@@ -193,6 +194,27 @@ static int nr_pdcp_entity_process_sdu(nr_pdcp_entity_t *entity,
   entity->stats.rxsdu_pkts++;
   entity->stats.rxsdu_bytes += size;
 
+  if (entity->sn_size == 12) {
+    header_size = 2;
+  } else {
+    header_size = 3;
+  }
+
+  /* SRBs always have MAC-I, even if integrity is not active */
+  if (entity->has_integrity || entity->type == NR_PDCP_SRB) {
+    integrity_size = 4;
+  } else {
+    integrity_size = 0;
+  }
+
+  /* if dropping is enabled, check if RLC has enough space to receive the PDU */
+  if (entity->do_drop) {
+    if (entity->type != NR_PDCP_SRB)
+      if (header_size + size + integrity_size > entity->rlc_tx_freesize)
+        return -1;
+  }
+
+  entity->rlc_tx_freesize -= size;
 
   count = entity->tx_next;
   sn = entity->tx_next & entity->sn_max;
@@ -207,19 +229,10 @@ static int nr_pdcp_entity_process_sdu(nr_pdcp_entity_t *entity,
   if (entity->sn_size == 12) {
     buf[0] = dc_bit | ((sn >> 8) & 0xf);
     buf[1] = sn & 0xff;
-    header_size = 2;
   } else {
     buf[0] = dc_bit | ((sn >> 16) & 0x3);
     buf[1] = (sn >> 8) & 0xff;
     buf[2] = sn & 0xff;
-    header_size = 3;
-  }
-
-  /* SRBs always have MAC-I, even if integrity is not active */
-  if (entity->has_integrity || entity->type == NR_PDCP_SRB) {
-    integrity_size = 4;
-  } else {
-    integrity_size = 0;
   }
 
   memcpy(buf + header_size, buffer, size);
@@ -362,11 +375,25 @@ static void check_t_reordering(nr_pdcp_entity_t *entity)
   }
 }
 
-void nr_pdcp_entity_set_time(struct nr_pdcp_entity_t *entity, uint64_t now)
+static void log_dropped_packets(nr_pdcp_entity_t *entity)
+{
+  /* log only every 2 seconds */
+  if (entity->t_current < entity->dropped_lastlog_time + 2000)
+    return;
+  if (entity->dropped_sdus == 0)
+    return;
+  LOG_W(PDCP, "%"PRIu64" SDUs (%"PRIu64" bytes) dropped\n", entity->dropped_sdus, entity->dropped_bytes);
+  entity->dropped_sdus = 0;
+  entity->dropped_bytes = 0;
+  entity->dropped_lastlog_time = entity->t_current;
+}
+
+void nr_pdcp_entity_set_time(nr_pdcp_entity_t *entity, uint64_t now)
 {
   entity->t_current = now;
 
   check_t_reordering(entity);
+  log_dropped_packets(entity);
 }
 
 void nr_pdcp_entity_delete(nr_pdcp_entity_t *entity)
@@ -449,9 +476,18 @@ nr_pdcp_entity_t *new_nr_pdcp_entity(
 
   ret->is_gnb = is_gnb;
 
+  ret->rlc_rnti = -1;
+  ret->do_drop = get_softmodem_params()->pdcp_drop;
+
   nr_pdcp_entity_set_security(ret,
                               integrity_algorithm, (char *)integrity_key,
                               ciphering_algorithm, (char *)ciphering_key);
 
   return ret;
+}
+
+void nr_pdcp_entity_set_rlc_ids(nr_pdcp_entity_t *entity, int rlc_rnti, int rlc_channel_id)
+{
+  entity->rlc_rnti = rlc_rnti;
+  entity->rlc_channel_id = rlc_channel_id;
 }
