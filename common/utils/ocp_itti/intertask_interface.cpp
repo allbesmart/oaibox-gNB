@@ -132,8 +132,8 @@ extern "C" {
     int message_id = message->ittiMsgHeader.messageId;
     size_t s=t->message_queue.size();
 
-    // to reduce the number of logs, we give a message each increase of 25%
-    if ((s > t->last_log_size * 1.25) && (s > t->admin.queue_size / 10)) {
+    // to reduce the number of logs, we give a message each increase of 100%
+    if ((s > t->last_log_size * 2.0) && (s > t->admin.queue_size / 10)) {
       if (s > t->admin.queue_size) {
         LOG_E(TMR, "Queue for %s task contains %ld messages\n", itti_get_task_name(destination_task_id), s);
       } else {
