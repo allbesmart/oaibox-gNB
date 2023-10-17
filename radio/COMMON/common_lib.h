@@ -61,6 +61,9 @@
 typedef int64_t openair0_timestamp;
 typedef volatile int64_t openair0_vtimestamp;
 
+#define USRP_MODE_TX 0
+#define USRP_MODE_RX 1
+#define TX_RX_SLOTS_IN_ADVANCE 2
 
 /*!\brief structure holds the parameters to configure USRP devices*/
 typedef struct openair0_device_t openair0_device;
@@ -176,6 +179,7 @@ typedef struct {
 typedef enum {
   RU_GPIO_CONTROL_GENERIC,
   RU_GPIO_CONTROL_INTERDIGITAL,
+  RU_GPIO_CONTROL_TMYTEK
 } gpio_control_t;
 
 /*! \brief RF frontend parameters set by application */
@@ -508,6 +512,11 @@ struct openair0_device_t {
   /*! \brief Stop operation of the transceiver
    */
   int (*trx_stop_func)(openair0_device *device);
+
+  /*! \brief TBD
+   * \param mode 0: tx, 1: rx
+   */
+  void (*usrp_set_mode)(int mode);
 
   /* Functions API related to UE*/
 

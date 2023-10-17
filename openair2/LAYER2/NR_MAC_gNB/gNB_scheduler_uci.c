@@ -1000,8 +1000,12 @@ void handle_nr_uci_pucch_0_1(module_id_t mod_id,
   if (((uci_01->pduBitmap >> 1) & 0x01)) {
     // iterate over received harq bits
     for (int harq_bit = 0; harq_bit < uci_01->harq.num_harq; harq_bit++) {
-      const uint8_t harq_value = uci_01->harq.harq_list[harq_bit].harq_value;
-      const uint8_t harq_confidence = uci_01->harq.harq_confidence_level;
+      uint8_t harq_value = uci_01->harq.harq_list[harq_bit].harq_value;
+      uint8_t harq_confidence = uci_01->harq.harq_confidence_level;
+      if (!UE->Msg4_ACKed) {
+        harq_value = 0;
+        harq_confidence = 0;
+      }
       NR_UE_harq_t *harq = find_harq(frame, slot, UE, nrmac->dl_bler.harq_round_max);
       if (!harq) {
         LOG_E(NR_MAC, "UE %04x: Could not find a HARQ process at %4d.%2d!\n", UE->rnti, frame, slot);
@@ -1241,6 +1245,9 @@ int nr_acknack_scheduling(gNB_MAC_INST *mac,
     const int pucch_slot = (slot + pdsch_to_harq_feedback[f]) % n_slots_frame;
     // check if the slot is UL
     if(pucch_slot%nr_slots_period < first_ul_slot_period)
+      continue;
+    // check if the slot is last UL
+    if ((pucch_slot + 1) % nr_slots_period < first_ul_slot_period)
       continue;
     const int pucch_frame = (frame + ((slot + pdsch_to_harq_feedback[f]) / n_slots_frame)) & 1023;
     // we store PUCCH resources according to slot, TDD configuration and size of the vector containing PUCCH structures

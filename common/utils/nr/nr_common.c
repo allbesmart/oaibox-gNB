@@ -379,7 +379,8 @@ int get_nb_periods_per_frame(uint8_t tdd_period)
 
 int get_first_ul_slot(int nrofDownlinkSlots, int nrofDownlinkSymbols, int nrofUplinkSymbols)
 {
-  return (nrofDownlinkSlots + (nrofDownlinkSymbols != 0 && nrofUplinkSymbols == 0));
+  // TMYTEK: Due to TX/RX switching limitations we are not scheduling ULSCH in the first UL slot (not including Flexible slot)
+  return (nrofDownlinkSlots + (nrofDownlinkSymbols != 0 && nrofUplinkSymbols == 0)) + 1;
 }
 
 int get_dmrs_port(int nl, uint16_t dmrs_ports)

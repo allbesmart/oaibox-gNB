@@ -390,6 +390,11 @@ uint32_t nr_dlsch_decoding(PHY_VARS_NR_UE *phy_vars_ue,
     return((1+dlsch->max_ldpc_iterations));
   }
 
+  if (dlsch->Nl == 0) {
+    LOG_E(PHY, "Illegal dlsch->Nl: %d\n", dlsch->Nl);
+    return (dlsch->max_ldpc_iterations + 1);
+  }
+
   if (LOG_DEBUGFLAG(DEBUG_DLSCH_DECOD))
     LOG_I(PHY,"Segmentation: C %d, K %d\n",harq_process->C,harq_process->K);
 

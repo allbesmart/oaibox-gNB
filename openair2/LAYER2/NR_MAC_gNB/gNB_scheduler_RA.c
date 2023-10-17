@@ -492,7 +492,8 @@ static void nr_schedule_msg2(uint16_t rach_frame,
 
   // computing start of next period
   uint8_t start_next_period = rach_slot-(rach_slot%tdd_period_slot)+tdd_period_slot;
-  int eff_slot = start_next_period + last_dl_slot_period; // initializing scheduling of slot to next mixed (or last dl) slot
+  // We cannot schedule DLSCH to flexible slots due to TX/RX switching limitations, lets advance Msg2 by 1 slot
+  int eff_slot = start_next_period + last_dl_slot_period - 1; // initializing scheduling of slot to next mixed (or last dl) slot
 
   // we can't schedule msg2 before sl_ahead since prach
   while ((eff_slot-rach_slot)<=sl_ahead) {

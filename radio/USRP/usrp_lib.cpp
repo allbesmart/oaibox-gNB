@@ -56,6 +56,16 @@
 
 #include "openair1/PHY/sse_intrin.h"
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <filesystem>
+#include <fcntl.h>
+#include <unistd.h>
+#include <dirent.h>
+#include <cstring>
+#include "tlkcore_lib.hpp"
+#include "usrp_fbs.hpp"
+
 /** @addtogroup _USRP_PHY_RF_INTERFACE_
  * @{
  */
@@ -105,6 +115,13 @@ typedef struct {
   //! timestamp of RX packet
   openair0_timestamp rx_timestamp;
 } usrp_state_t;
+
+using namespace tlkcore;
+
+bool copyFile(const std::string& sourcePath, const std::string& destinationPath);
+bool copyDirectory(const std::string& sourceDir, const std::string& destinationDir);
+int update_beam_config(tlkcore_lib::tlkcore_ptr service);
+int fpga_conftrol(tlkcore_lib::tlkcore_ptr service, usrp_state_t *s);
 
 //void print_notes(void)
 //{
@@ -295,6 +312,61 @@ static void trx_usrp_start_generic_gpio(openair0_device *device, usrp_state_t *s
   s->usrp->set_gpio_attr(s->gpio_bank, "OUT", MAN_MASK, 0xfff);
 }
 
+bool copyFile(const std::string &sourcePath, const std::string &destinationPath)
+{
+  std::ifstream sourceFile(sourcePath, std::ios::binary);
+  std::ofstream destinationFile(destinationPath, std::ios::binary);
+
+  if (!sourceFile || !destinationFile) {
+    return false; // 打开文件失败
+  }
+
+  destinationFile << sourceFile.rdbuf();
+  return true;
+}
+
+bool copyDirectory(const std::string &sourceDir, const std::string &destinationDir)
+{
+  struct stat sourceStat;
+  if (stat(sourceDir.c_str(), &sourceStat) != 0) {
+    return false;
+  }
+
+  if (!S_ISDIR(sourceStat.st_mode)) {
+    return false;
+  }
+
+  if (mkdir(destinationDir.c_str(), sourceStat.st_mode) != 0) {
+    return false;
+  }
+
+  DIR *sourceDirPtr = opendir(sourceDir.c_str());
+  if (!sourceDirPtr) {
+    return false;
+  }
+
+  struct dirent *entry;
+  while ((entry = readdir(sourceDirPtr))) {
+    if (strcmp(entry->d_name, ".") != 0 && strcmp(entry->d_name, "..") != 0) {
+      std::string sourceEntryPath = sourceDir + "/" + entry->d_name;
+      std::string destinationEntryPath = destinationDir + "/" + entry->d_name;
+
+      if (entry->d_type == DT_DIR) {
+        if (!copyDirectory(sourceEntryPath, destinationEntryPath)) {
+          return false;
+        }
+      } else {
+        if (!copyFile(sourceEntryPath, destinationEntryPath)) {
+          return false;
+        }
+      }
+    }
+  }
+
+  closedir(sourceDirPtr);
+  return true;
+}
+
 /*! \brief Called to start the USRP transceiver. Return 0 if OK, < 0 if error
     @param device pointer to the device structure specific to the RF hardware target
 */
@@ -319,6 +391,30 @@ static int trx_usrp_start(openair0_device *device) {
     case RU_GPIO_CONTROL_INTERDIGITAL:
       trx_usrp_start_interdigital_gpio(device, s);
       break;
+    case RU_GPIO_CONTROL_TMYTEK: {
+      copyDirectory("/home/user/openairinterface5g/radio/USRP/files",
+                    "/home/user/openairinterface5g/cmake_targets/ran_build/build/files");
+      copyDirectory("/home/user/openairinterface5g/radio/USRP/lib",
+                    "/home/user/openairinterface5g/cmake_targets/ran_build/build/lib");
+      copyDirectory("/home/user/openairinterface5g/radio/USRP/config",
+                    "/home/user/openairinterface5g/cmake_targets/ran_build/build/config");
+      copyFile("/home/user/openairinterface5g/radio/USRP/libtlkcore_lib.so",
+               "/home/user/openairinterface5g/cmake_targets/ran_build/build/libtlkcore_lib.so");
+      copyFile("/home/user/openairinterface5g/radio/USRP/logging.conf",
+               "/home/user/openairinterface5g/cmake_targets/ran_build/build/logging.conf");
+
+      printf("Setup SPI for TMYTEK devices in USRP address %s\n", device->openair0_cfg->sdr_addrs);
+      tlkcore_lib::tlkcore_ptr ptr;
+      ptr = tlkcore_lib::make();
+      // Please provide the device config file for lib scanning & init
+      const std::string path = "/home/user/openairinterface5g/radio/USRP/config/device.conf";
+      ptr->scan_init_dev(path);
+      // set_ud_freq(ptr);
+      update_beam_config(ptr);
+      fpga_conftrol(ptr, s);
+      usrp_set_mode(0);
+      break;
+    }
     default:
       AssertFatal(false, "illegal GPIO controller %d\n", device->openair0_cfg->gpio_controller);
   }
@@ -410,6 +506,7 @@ static void trx_usrp_end(openair0_device *device) {
   device->trx_set_freq_func = NULL;
   device->trx_set_gains_func = NULL;
   device->trx_write_init = NULL;
+  device->usrp_set_mode = NULL;
 }
 
 /*! \brief Called to send samples to the USRP RF target
@@ -1036,6 +1133,7 @@ extern "C" {
     device->trx_set_freq_func = trx_usrp_set_freq;
     device->trx_set_gains_func   = trx_usrp_set_gains;
     device->trx_write_init = trx_usrp_write_init;
+    device->usrp_set_mode = usrp_set_mode;
 
 
     // hotfix! to be checked later
@@ -1527,3 +1625,84 @@ extern "C" {
 }
 /*@}*/
 }/* extern c */
+
+int update_beam_config(tlkcore_lib::tlkcore_ptr service)
+{
+  const std::vector<std::string> bf = {
+      "D2252L030-28",
+  };
+
+  for (std::string sn : bf) {
+    bool fpga_mode;
+    service->get_fast_parallel_mode(sn, fpga_mode);
+    printf("[Main] get_fast_parallel_mode: %d\r\n", fpga_mode);
+
+#if 0
+        /* A sample to set beam directly */
+        rf_mode_t mode = MODE_TX;
+        float gain_db = 4;
+        int theta = 0;
+        int phi = 0;
+        service->set_beam_angle(sn, 28.0, mode, gain_db, theta, phi);
+#else
+    /* Set all beam configs via csv file */
+    service->apply_beam_patterns(sn, 28.0);
+#endif
+  }
+  return 0;
+}
+
+int fpga_conftrol(tlkcore_lib::tlkcore_ptr service, usrp_state_t *s)
+{
+  const std::string sn = "D2252L030-28";
+
+  // Setup BBox as fast parallel mode
+  bool fpga_mode;
+  service->get_fast_parallel_mode(sn, fpga_mode);
+  printf("[Main] get_fast_parallel_mode: %d\r\n", fpga_mode);
+  if (fpga_mode == false) {
+    fpga_mode = true;
+    service->set_fast_parallel_mode(sn, fpga_mode, 28.0);
+  }
+
+  // Setup UHD for SPI ready, and assign IP to reduce finding time, and assign "" will takes to scan available usrps
+  std::string usrp_addr = ""; //"addr=192.168.100.10";
+  usrp_spi_setup(s->usrp);
+
+  // char fpga_ctl_buf[64];
+#if 1
+  // Case1: control UHD to switch beam id by typing beam id
+  int beam_id = 0;
+  usrp_select_beam_id(MODE_TX, beam_id);
+  // do {
+  //     memset(fpga_ctl_buf, 0, sizeof(fpga_ctl_buf));
+  //     printf("Please enter the beam id or quit(\'q\'): ");
+
+  //     fgets(fpga_ctl_buf, sizeof(fpga_ctl_buf), stdin);
+  //     if (fpga_ctl_buf[0] == 'q') { // Begin with 'q'
+  //         printf("Break and quit loop\r\n");
+  //         break;
+  //     }
+  //     printf("You entered: %s", fpga_ctl_buf);
+  //     beam_id = atoi(fpga_ctl_buf);
+  //     if (usrp_select_beam_id(MODE_TX, beam_id) <= 0) {
+  //         continue;
+  //     }
+  // } while (1);
+#else
+  // Case2: setup batch beams, please DO NOT print any msg after running
+  printf("Please press enter to start:");
+  fgets(fpga_ctl_buf, sizeof(fpga_ctl_buf), stdin);
+  int beams[] = {1, 2, 3, 1, 4, 64};
+  int length = sizeof(beams) / sizeof(beams[0]);
+  for (int i = 0; i < length; i++) {
+    usrp_select_beam_id(MODE_TX, beams[i]);
+  }
+#endif
+
+  // Setup BBox back from fast parallel mode
+  // fpga_mode = false;
+  // service->set_fast_parallel_mode(sn, fpga_mode, 28.0);
+  // service->get_fast_parallel_mode(sn, fpga_mode);
+  return 0;
+}

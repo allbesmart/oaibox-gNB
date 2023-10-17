@@ -1988,8 +1988,8 @@ void nr_rrc_going_to_IDLE(instance_t instance,
 void handle_t300_expiry(instance_t instance)
 {
   // reset MAC, release the MAC configuration
-  NR_UE_MAC_reset_cause_t cause = T300_EXPIRY;
-  nr_rrc_mac_config_req_reset(instance, cause);
+  //NR_UE_MAC_reset_cause_t cause = T300_EXPIRY;
+  //nr_rrc_mac_config_req_reset(instance, cause);
   // TODO handle connEstFailureControl
   // TODO inform upper layers about the failure to establish the RRC connection
 }

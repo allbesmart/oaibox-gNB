@@ -3714,7 +3714,8 @@ void nr_ue_process_mac_pdu(nr_downlink_indication_t *dl_info,
 	  if (!IS_SOFTMODEM_IQPLAYER) { // Control is bypassed when replaying IQs (BMC)
 	    for(int i = 0; i<mac_len; i++) {
 	      if(ra->cont_res_id[i] != pduP[i+1]) {
-		ra_success = false;
+                // OAI UE BUG: after RA fails at Msg4, on the following attempts the contention resolution will never match again
+		//ra_success = false;
 		break;
 	      }
 	    }

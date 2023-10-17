@@ -37,6 +37,9 @@
 #include "LAYER2/nr_rlc/nr_rlc_oai_api.h"
 #include "RRC/NR/MESSAGES/asn1_msg.h"
 
+// TMYTEK: USRP GPIO TX/RX Switching
+static int usrp_mode_state = USRP_MODE_RX;
+
 /*
  *  NR SLOT PROCESSING SEQUENCE
  *
@@ -802,7 +805,24 @@ void *UE_thread(void *arg)
   AssertFatal(0== openair0_device_load(&(UE->rfdevice), &openair0_cfg[0]), "");
   UE->rfdevice.host_type = RAU_HOST;
   UE->is_synchronized = 0;
+
+  if (!IS_SOFTMODEM_RFSIM) {
+    // Hardcoded value! Need to get it from the command line
+    UE->rfdevice.openair0_cfg->gpio_controller = RU_GPIO_CONTROL_TMYTEK;
+  }
+
   AssertFatal(UE->rfdevice.trx_start_func(&UE->rfdevice) == 0, "Could not start the device\n");
+
+  if (UE->rfdevice.openair0_cfg->gpio_controller == RU_GPIO_CONTROL_TMYTEK) {
+    if (UE->rfdevice.openair0_cfg->sample_rate == 122880000) {
+      UE->rfdevice.openair0_cfg->tx_sample_advance = 288;
+    } else if (UE->rfdevice.openair0_cfg->sample_rate == 61440000) {
+      UE->rfdevice.openair0_cfg->tx_sample_advance = 190;
+    }
+    // By default, the UE should be receiver
+    usrp_mode_state = USRP_MODE_RX;
+    UE->rfdevice.usrp_set_mode(USRP_MODE_RX);
+  }
 
   notifiedFIFO_t nf;
   initNotifiedFIFO(&nf);
@@ -972,6 +992,25 @@ void *UE_thread(void *arg)
       timing_advance = UE->timing_advance;
     }
 
+    if (UE->rfdevice.openair0_cfg->gpio_controller == RU_GPIO_CONTROL_TMYTEK) {
+      // Check next slot in advance for TX RX switching
+      int next_slot_in_advance_type = nr_ue_slot_select(cfg, curMsg.proc.nr_slot_rx + TX_RX_SLOTS_IN_ADVANCE);
+      // LOG_I(PHY, "slot_rx: %d, next slot: %d, next slot type: %d\n", *slot, next_slot_in_advance, next_slot_in_advance_type);
+
+      // Flexible slots are not supported yet! For now, we use them for DL only
+      if (usrp_mode_state != USRP_MODE_RX && (next_slot_in_advance_type == NR_DOWNLINK_SLOT)) {
+        // Set USRP mode to receiver
+        usrp_mode_state = USRP_MODE_RX;
+        UE->rfdevice.usrp_set_mode(USRP_MODE_RX);
+        // LOG_I(PHY, "(%4d.%2d) Calling usrp_set_mode(%d) TX\n", *frame, *slot, usrp_mode_state);
+      } else if (usrp_mode_state != USRP_MODE_TX && (next_slot_in_advance_type == NR_UPLINK_SLOT)) {
+        // Set USRP mode to transmitter
+        usrp_mode_state = USRP_MODE_TX;
+        UE->rfdevice.usrp_set_mode(USRP_MODE_TX);
+        // LOG_I(PHY, "(%4d.%2d) Calling usrp_set_mode(%d) RX\n", *frame, *slot, usrp_mode_state);
+      }
+    }
+
     // No SIB1 found, need to synch again... This avoids the screen overflooded of LLLLLLLLLLs infinitely
     if (mac->state == UE_SYNC && sib1_decoded == 0 && curMsg.proc.frame_rx > (mac->mib_frame + 10)) {
       UE->is_synchronized = false;
@@ -979,9 +1018,10 @@ void *UE_thread(void *arg)
     }
 
     // Check for DL
-    if (UE->dl_stats[0] < 200) {
+    if (mac->state > UE_SYNC && UE->dl_stats[0] < 200) {
       if (UE->dl_stats[0] == dl_stats_counter) {
-        //LOG_W(PHY, "dl_stats_counter: %d dl_stats_timer: %d\n", dl_stats_counter, dl_stats_timer);
+        if (dl_stats_timer % 100 == 0)
+          LOG_D(PHY, "dl_stats_counter: %d dl_stats_timer: %d\n", dl_stats_counter, dl_stats_timer);
         dl_stats_timer--;
       } else {
         dl_stats_timer = dl_stats_timer_default;
@@ -1013,6 +1053,13 @@ void *UE_thread(void *arg)
             "Resetting DL RF frequency to %ld Hz and UL RF frequency to %ld Hz) before restarting synchronization\n",
             dl_carrier,
             ul_carrier);
+
+      if (UE->rfdevice.openair0_cfg->gpio_controller == RU_GPIO_CONTROL_TMYTEK) {
+        // Set USRP mode to receiver
+        usrp_mode_state = USRP_MODE_RX;
+        UE->rfdevice.usrp_set_mode(USRP_MODE_RX);
+      }
+
       continue;
     }
 

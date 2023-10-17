@@ -342,7 +342,8 @@ static void config_csirs(const NR_ServingCellConfigCommon_t *servingcellconfigco
     const int n_slots_frame = slotsperframe[*servingcellconfigcommon->ssbSubcarrierSpacing];
     const int nb_slots_per_period = tdd ? n_slots_frame/get_nb_periods_per_frame(tdd->dl_UL_TransmissionPeriodicity): n_slots_frame;
     const int nb_dl_slots_period = tdd ? tdd->nrofDownlinkSlots : n_slots_frame;
-    const int n_ul_slots_period = tdd ? (tdd->nrofUplinkSlots + (tdd->nrofUplinkSymbols > 0)) : n_slots_frame;
+    // TMYTEK: Due to TX/RX switching limitations we are not scheduling ULSCH in the first and last UL slots (not including Flexible slot)
+    const int n_ul_slots_period = tdd ? (tdd->nrofUplinkSlots + (tdd->nrofUplinkSymbols > 0) - 2) : n_slots_frame;
     const int ideal_period = set_ideal_period(nb_slots_per_period, n_ul_slots_period); // same periodicity as CSI measurement report
 
     if(!csi_MeasConfig->nzp_CSI_RS_ResourceToAddModList)
@@ -795,7 +796,7 @@ void nr_rrc_config_dl_tda(struct NR_PDSCH_TimeDomainResourceAllocationList *pdsc
 
   // coreset duration setting to be improved in the framework of RRC harmonization, potentially using a common function
   int len_coreset = 1;
-  if (curr_bwp < 48)
+  //if (curr_bwp < 48)
     len_coreset = 2;
   // setting default TDA for DL with TDA index 0
   struct NR_PDSCH_TimeDomainResourceAllocation *timedomainresourceallocation = CALLOC(1,sizeof(NR_PDSCH_TimeDomainResourceAllocation_t));
@@ -841,7 +842,7 @@ void nr_rrc_config_ul_tda(NR_ServingCellConfigCommon_t *scc, int min_fb_delay){
   pusch_timedomainresourceallocation->k2 = CALLOC(1,sizeof(long));
   *pusch_timedomainresourceallocation->k2 = k2;
   pusch_timedomainresourceallocation->mappingType = NR_PUSCH_TimeDomainResourceAllocation__mappingType_typeB;
-  pusch_timedomainresourceallocation->startSymbolAndLength = get_SLIV(0, 13);
+  pusch_timedomainresourceallocation->startSymbolAndLength = get_SLIV(0, 12);
   asn1cSeqAdd(&scc->uplinkConfigCommon->initialUplinkBWP->pusch_ConfigCommon->choice.setup->pusch_TimeDomainAllocationList->list,pusch_timedomainresourceallocation); 
 
   // UL TDA index 1 in case of SRS
@@ -849,7 +850,7 @@ void nr_rrc_config_ul_tda(NR_ServingCellConfigCommon_t *scc, int min_fb_delay){
   pusch_timedomainresourceallocation1->k2 = CALLOC(1,sizeof(long));
   *pusch_timedomainresourceallocation1->k2 = k2;
   pusch_timedomainresourceallocation1->mappingType = NR_PUSCH_TimeDomainResourceAllocation__mappingType_typeB;
-  pusch_timedomainresourceallocation1->startSymbolAndLength = get_SLIV(0, 12);
+  pusch_timedomainresourceallocation1->startSymbolAndLength = get_SLIV(0, 11);
   asn1cSeqAdd(&scc->uplinkConfigCommon->initialUplinkBWP->pusch_ConfigCommon->choice.setup->pusch_TimeDomainAllocationList->list,pusch_timedomainresourceallocation1);
 
   if(frame_type==TDD) {
@@ -870,14 +871,14 @@ void nr_rrc_config_ul_tda(NR_ServingCellConfigCommon_t *scc, int min_fb_delay){
       struct NR_PUSCH_TimeDomainResourceAllocation *pusch_timedomainresourceallocation_msg3 = CALLOC(1,sizeof(struct NR_PUSCH_TimeDomainResourceAllocation));
       pusch_timedomainresourceallocation_msg3->k2 = CALLOC(1,sizeof(long));
       int no_mix_slot = ul_symb < 3 ? 1 : 0; // we need at least 2 symbols for scheduling Msg3
-      *pusch_timedomainresourceallocation_msg3->k2 = nb_slots_per_period - DELTA[mu] + no_mix_slot;
+      *pusch_timedomainresourceallocation_msg3->k2 = nb_slots_per_period - DELTA[mu] + no_mix_slot + 2;
       if(*pusch_timedomainresourceallocation_msg3->k2 < min_fb_delay)
         *pusch_timedomainresourceallocation_msg3->k2 += nb_slots_per_period;
       AssertFatal(*pusch_timedomainresourceallocation_msg3->k2 < 33,"Computed k2 for msg3 %ld is larger than the range allowed by RRC (0..32)\n",
                   *pusch_timedomainresourceallocation_msg3->k2);
       pusch_timedomainresourceallocation_msg3->mappingType = NR_PUSCH_TimeDomainResourceAllocation__mappingType_typeB;
       if(no_mix_slot)
-        pusch_timedomainresourceallocation_msg3->startSymbolAndLength = get_SLIV(0, 13); // full allocation if there is no mixed slot
+        pusch_timedomainresourceallocation_msg3->startSymbolAndLength = get_SLIV(0, 12); // full allocation if there is no mixed slot
       else
         pusch_timedomainresourceallocation_msg3->startSymbolAndLength = get_SLIV(14 - ul_symb, ul_symb - 1); // starting in fist ul symbol til the last but one
       asn1cSeqAdd(&scc->uplinkConfigCommon->initialUplinkBWP->pusch_ConfigCommon->choice.setup->pusch_TimeDomainAllocationList->list,pusch_timedomainresourceallocation_msg3);
@@ -921,8 +922,8 @@ static void config_pucch_resset0(NR_PUCCH_Config_t *pucch_Config, int uid, int c
   pucchres0->format.present = NR_PUCCH_Resource__format_PR_format0;
   pucchres0->format.choice.format0 = calloc(1,sizeof(*pucchres0->format.choice.format0));
   pucchres0->format.choice.format0->initialCyclicShift = 0;
-  pucchres0->format.choice.format0->nrofSymbols = 1;
-  pucchres0->format.choice.format0->startingSymbolIndex = 13;
+  pucchres0->format.choice.format0->nrofSymbols = 2;
+  pucchres0->format.choice.format0->startingSymbolIndex = 12;
   asn1cSeqAdd(&pucch_Config->resourceToAddModList->list,pucchres0);
 
   asn1cSeqAdd(&pucch_Config->resourceSetToAddModList->list,pucchresset);
@@ -952,8 +953,8 @@ static void config_pucch_resset1(NR_PUCCH_Config_t *pucch_Config, const NR_UE_NR
   pucchres2->format.present = NR_PUCCH_Resource__format_PR_format2;
   pucchres2->format.choice.format2 = calloc(1,sizeof(*pucchres2->format.choice.format2));
   pucchres2->format.choice.format2->nrofPRBs = 8;
-  pucchres2->format.choice.format2->nrofSymbols = 1;
-  pucchres2->format.choice.format2->startingSymbolIndex = 13;
+  pucchres2->format.choice.format2->nrofSymbols = 2;
+  pucchres2->format.choice.format2->startingSymbolIndex = 12;
   asn1cSeqAdd(&pucch_Config->resourceToAddModList->list,pucchres2);
 
   asn1cSeqAdd(&pucch_Config->resourceSetToAddModList->list,pucchresset);
@@ -1257,9 +1258,9 @@ static struct NR_SetupRelease_PDSCH_Config *config_pdsch(uint64_t ssb_bitmap, in
   dmrs_DownlinkForPDSCH_MappingTypeA->maxLength = NULL;
   dmrs_DownlinkForPDSCH_MappingTypeA->scramblingID0 = NULL;
   dmrs_DownlinkForPDSCH_MappingTypeA->scramblingID1 = NULL;
-  dmrs_DownlinkForPDSCH_MappingTypeA->dmrs_AdditionalPosition = calloc(1, sizeof(*dmrs_DownlinkForPDSCH_MappingTypeA->dmrs_AdditionalPosition));
+  dmrs_DownlinkForPDSCH_MappingTypeA->dmrs_AdditionalPosition = NULL; //calloc(1, sizeof(*dmrs_DownlinkForPDSCH_MappingTypeA->dmrs_AdditionalPosition));
   // TODO possible improvement is to select based on some input additional position
-  *dmrs_DownlinkForPDSCH_MappingTypeA->dmrs_AdditionalPosition = NR_DMRS_DownlinkConfig__dmrs_AdditionalPosition_pos1;
+  //*dmrs_DownlinkForPDSCH_MappingTypeA->dmrs_AdditionalPosition = NR_DMRS_DownlinkConfig__dmrs_AdditionalPosition_pos1;
 
   pdsch_Config->dataScramblingIdentityPDSCH = NULL;
   pdsch_Config->resourceAllocation = NR_PDSCH_Config__resourceAllocation_resourceAllocationType1;
@@ -1471,7 +1472,8 @@ static void set_csi_meas_periodicity(const NR_ServingCellConfigCommon_t *scc, NR
 {
   const NR_TDD_UL_DL_Pattern_t *tdd = scc->tdd_UL_DL_ConfigurationCommon ? &scc->tdd_UL_DL_ConfigurationCommon->pattern1 : NULL;
   const int n_slots_frame = slotsperframe[*scc->ssbSubcarrierSpacing];
-  const int n_ul_slots_period = tdd ? (tdd->nrofUplinkSlots + (tdd->nrofUplinkSymbols > 0)) : n_slots_frame;
+  // TMYTEK: Due to TX/RX switching limitations we are not scheduling ULSCH in the first and last UL slots (not including Flexible slot)
+  const int n_ul_slots_period = tdd ? (tdd->nrofUplinkSlots + (tdd->nrofUplinkSymbols > 0) - 2) : n_slots_frame;
   const int n_slots_period = tdd ? n_slots_frame / get_nb_periods_per_frame(tdd->dl_UL_TransmissionPeriodicity) : n_slots_frame;
   const int ideal_period = set_ideal_period(n_slots_period, n_ul_slots_period);
   const int first_ul_slot_period = tdd ? get_first_ul_slot(tdd->nrofDownlinkSlots, tdd->nrofDownlinkSymbols, tdd->nrofUplinkSymbols) : 0;

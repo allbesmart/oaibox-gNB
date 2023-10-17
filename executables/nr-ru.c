@@ -59,7 +59,8 @@
 unsigned short config_frames[4] = {2,9,11,13};
 #endif
 
-
+// TMYTEK: USRP GPIO TX/RX Switching
+static int usrp_mode_state = USRP_MODE_TX;
 
 /* these variables have to be defined before including ENB_APP/enb_paramdef.h and GNB_APP/gnb_paramdef.h */
 static int DEFBANDS[] = {7};
@@ -715,6 +716,27 @@ void rx_rf(RU_t *ru,int *frame,int *slot) {
     *slot  = proc->tti_rx;
   }
 
+  if (ru->rfdevice.openair0_cfg->gpio_controller == RU_GPIO_CONTROL_TMYTEK) {
+    // Check next slot in advance for TX RX switching
+    int next_slot_in_advance = fp->get_slot_from_timestamp(proc->timestamp_rx + (samples_per_slot * TX_RX_SLOTS_IN_ADVANCE), fp);
+    nfapi_nr_config_request_scf_t *ru_cfg = &ru->config;
+    int next_slot_in_advance_type = nr_slot_select(ru_cfg, *frame, next_slot_in_advance);
+    // LOG_I(PHY, "slot_rx: %d, next slot: %d, next slot type: %d\n", *slot, next_slot_in_advance, next_slot_in_advance_type);
+
+    // Flexible slots are not supported yet! For now, we use them for DL only
+    if (usrp_mode_state != USRP_MODE_TX && (next_slot_in_advance_type == NR_DOWNLINK_SLOT)) {
+      // Set USRP mode to transmitter
+      usrp_mode_state = USRP_MODE_TX;
+      ru->rfdevice.usrp_set_mode(USRP_MODE_TX);
+      // LOG_I(PHY, "(%4d.%2d) Calling usrp_set_mode(%d) TX\n", *frame, *slot, usrp_mode_state);
+    } else if (usrp_mode_state != USRP_MODE_RX && (next_slot_in_advance_type == NR_UPLINK_SLOT)) {
+      // Set USRP mode to receiver
+      usrp_mode_state = USRP_MODE_RX;
+      ru->rfdevice.usrp_set_mode(USRP_MODE_RX);
+      // LOG_I(PHY, "(%4d.%2d) Calling usrp_set_mode(%d) RX\n", *frame, *slot, usrp_mode_state);
+    }
+  }
+
   //printf("timestamp_rx %lu, frame %d(%d), subframe %d(%d)\n",ru->timestamp_rx,proc->frame_rx,frame,proc->tti_rx,subframe);
   VCD_SIGNAL_DUMPER_DUMP_VARIABLE_BY_NAME( VCD_SIGNAL_DUMPER_VARIABLES_TRX_TS, (proc->timestamp_rx+ru->ts_offset)&0xffffffff );
 
@@ -763,6 +785,9 @@ static radio_tx_gpio_flag_t get_gpio_flags(RU_t *ru, int slot)
       LOG_I(HW, "slot %d, beam %d, flags_gpio %d\n", slot, beam, flags_gpio);
       break;
     }
+    case RU_GPIO_CONTROL_TMYTEK:
+      // Nothing to do
+      break;
     default:
       AssertFatal(false, "illegal GPIO controller %d\n", cfg0->gpio_controller);
   }
@@ -1952,6 +1977,9 @@ static void NRRCconfig_RU(configmodule_interface_t *cfg)
         } else if (strcmp(*RUParamList.paramarray[j][RU_GPIO_CONTROL].strptr, "interdigital") == 0) {
           RC.ru[j]->openair0_cfg.gpio_controller = RU_GPIO_CONTROL_INTERDIGITAL;
           LOG_I(PHY, "RU GPIO control set as 'interdigital'\n");
+        } else if (strcmp(*RUParamList.paramarray[j][RU_GPIO_CONTROL].strptr, "tmytek") == 0) {
+          RC.ru[j]->openair0_cfg.gpio_controller = RU_GPIO_CONTROL_TMYTEK;
+          LOG_I(PHY, "RU GPIO control set as 'tmytek'\n");
         } else {
           AssertFatal(false,
                       "bad GPIO controller in configuration file: '%s'\n",

@@ -495,6 +495,21 @@ void nr_mac_config_scc(gNB_MAC_INST *nrmac, NR_ServingCellConfigCommon_t *scc, c
   }
 
   for (int slot = 0; slot < n; ++slot) {
+
+    // TMYTEK: Due to TX/RX switching limitations we are not scheduling DLSCH in the last DL slot
+    // Additionally, do not schedle DLSCH in the flexible slots because of error: nr_rate_matching: invalid parameters (Foffset 3000 > E 2688)
+    if ((slot % nr_slots_period) == (nr_dl_slots - 1)) {
+      continue;
+    }
+    // TMYTEK: Due to TX/RX switching limitations we are not scheduling ULSCH in the first UL slot, it also includes the change in function get_first_ul_slot()
+    if ((slot % nr_slots_period) == (nr_ulstart_slot - 1)) {
+      continue;
+    }
+    // TMYTEK: Due to TX/RX switching limitations we are not scheduling ULSCH in the last UL slot
+    if ((slot % nr_slots_period) == (nr_slots_period - 1)) {
+      continue;
+    }
+
     nrmac->dlsch_slot_bitmap[slot / 64] |= (uint64_t)((slot % nr_slots_period) < nr_dl_slots) << (slot % 64);
     nrmac->ulsch_slot_bitmap[slot / 64] |= (uint64_t)((slot % nr_slots_period) >= nr_ulstart_slot) << (slot % 64);
 
