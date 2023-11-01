@@ -27,7 +27,6 @@
  * \version 1.0
  * \company Eurecom
  * @ingroup _mac
-
  */
 
 #include <softmodem-common.h>
@@ -586,6 +585,15 @@ bool nr_find_nb_rb(uint16_t Qm,
   return *tbs >= bytes && *nb_rb <= nb_rb_max;
 }
 
+const NR_DMRS_UplinkConfig_t *get_DMRS_UplinkConfig(const NR_PUSCH_Config_t *pusch_Config, const NR_tda_info_t *tda_info)
+{
+  if (pusch_Config == NULL)
+    return NULL;
+
+  return tda_info->mapping_type == typeA ? pusch_Config->dmrs_UplinkForPUSCH_MappingTypeA->choice.setup
+                                         : pusch_Config->dmrs_UplinkForPUSCH_MappingTypeB->choice.setup;
+}
+
 NR_pusch_dmrs_t get_ul_dmrs_params(const NR_ServingCellConfigCommon_t *scc,
                                    const NR_UE_UL_BWP_t *ul_bwp,
                                    const NR_tda_info_t *tda_info,
@@ -623,8 +631,6 @@ NR_pusch_dmrs_t get_ul_dmrs_params(const NR_ServingCellConfigCommon_t *scc,
     num_dmrs_symb += (dmrs.ul_dmrs_symb_pos >> i) & 1;
   dmrs.num_dmrs_symb = num_dmrs_symb;
   dmrs.N_PRB_DMRS = dmrs.num_dmrs_cdm_grps_no_data * (dmrs.dmrs_config_type == 0 ? 6 : 4);
-
-  dmrs.NR_DMRS_UplinkConfig = NR_DMRS_UplinkConfig;
   return dmrs;
 }
 
@@ -2909,10 +2915,10 @@ void UL_tti_req_ahead_initialization(gNB_MAC_INST * gNB, NR_ServingCellConfigCom
   }
 }
 
-void send_initial_ul_rrc_message(gNB_MAC_INST *mac, int rnti, const uint8_t *sdu, sdu_size_t sdu_len, void *rawUE)
+void send_initial_ul_rrc_message(int rnti, const uint8_t *sdu, sdu_size_t sdu_len, void *data)
 {
-
-  NR_UE_info_t *UE = (NR_UE_info_t *)rawUE;
+  gNB_MAC_INST *mac = RC.nrmac[0];
+  NR_UE_info_t *UE = (NR_UE_info_t *)data;
   NR_SCHED_ENSURE_LOCKED(&mac->sched_lock);
 
   uint8_t du2cu[1024];
@@ -2946,7 +2952,7 @@ void prepare_initial_ul_rrc_message(gNB_MAC_INST *mac, NR_UE_info_t *UE)
   process_CellGroup(cellGroupConfig, UE);
 
   /* activate SRB0 */
-  nr_rlc_activate_srb0(UE->rnti, mac, UE, send_initial_ul_rrc_message);
+  nr_rlc_activate_srb0(UE->rnti, UE, send_initial_ul_rrc_message);
 
   /* the cellGroup sent to CU specifies there is SRB1, so create it */
   DevAssert(cellGroupConfig->rlc_BearerToAddModList->list.count == 1);

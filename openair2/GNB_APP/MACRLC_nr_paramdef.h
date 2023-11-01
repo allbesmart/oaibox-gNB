@@ -19,8 +19,8 @@
  *      contact@openairinterface.org
  */
 
-/*! \file openair2/GNB_APP/MACRLC_nr_paramdef.f
- * \brief definition of configuration parameters for all gNodeB modules 
+/*! \file MACRLC_nr_paramdef.h
+ * \brief definition of configuration parameters for all gNodeB modules
  * \author Francois TABURET, WEI-TAI CHEN
  * \date 2018
  * \version 0.1
@@ -29,7 +29,6 @@
  * \note
  * \warning
  */
-
 
 #ifndef __GNB_APP_MACRLC_NR_PARAMDEF__H__
 #define __GNB_APP_MACRLC_NR_PARAMDEF__H__
@@ -201,6 +200,8 @@
   { .s2 = { config_check_intrange, {0, 31} } }, /* DL min MCS */ \
   { .s2 = { config_check_intrange, {0, 31} } }, /* DL max MCS */ \
   { .s5 = { NULL } }, \
+  { .s2 = { config_check_intrange, {0, 31} } }, /* DL min MCS */ \
+  { .s2 = { config_check_intrange, {0, 31} } }, /* DL max MCS */ \
   { .s5 = { NULL } }, \
   { .s2 = { config_check_intrange, {0, 31} } }, /* UL min MCS */ \
   { .s2 = { config_check_intrange, {0, 31} } }, /* UL max MCS */ \

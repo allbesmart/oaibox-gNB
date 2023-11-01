@@ -107,26 +107,14 @@ void nr_mac_rrc_sync_ind(const module_id_t module_id,
                          const frame_t frame,
                          const bool in_sync);
 void nr_mac_rrc_ra_ind(const module_id_t mod_id, int frame, bool success);
-
-/**\brief
-   \param module_id  module id
-   \param CC_id      component carrier id
-   \param gNB_index  gNB index
-   \param frame_t    frameP
-   \param rb_id_t    SRB id
-   \param buffer_pP  pointer to buffer*/
-int8_t nr_mac_rrc_data_req_ue(const module_id_t Mod_idP,
-                              const int         CC_id,
-                              const uint8_t     gNB_id,
-                              const frame_t     frameP,
-                              const rb_id_t     Srb_id,
-                              uint8_t           *buffer_pP);
+void nr_mac_rrc_msg3_ind(const module_id_t mod_id, int rnti);
 
 int8_t nr_rrc_RA_succeeded(const module_id_t mod_id, const uint8_t gNB_index);
 
 /**\brief RRC UE task.
    \param void *args_p Pointer on arguments to start the task. */
 void *rrc_nrue_task(void *args_p);
+void *rrc_nrue(void *args_p);
 
 void nr_rrc_handle_timers(NR_UE_Timers_Constants_t *timers);
 
@@ -140,10 +128,8 @@ void nsa_sendmsg_to_lte_ue(const void *message, size_t msg_len, Rrc_Msg_Type_t m
 
 void start_oai_nrue_threads(void);
 
-/**\brief RRC UE generate RRCSetupRequest message.
-   \param module_id  module id
-   \param gNB_index  gNB index  */
-void nr_rrc_ue_generate_RRCSetupRequest(module_id_t module_id, const uint8_t gNB_index);
+/**\brief RRC UE generate RRCSetupRequest message. */
+void nr_rrc_ue_generate_RRCSetupRequest(module_id_t module_id, int rnti);
 
 void process_lte_nsa_msg(nsa_msg_t *msg, int msg_len);
 
@@ -170,6 +156,5 @@ void nr_rrc_manage_rlc_bearers(const NR_CellGroupConfig_t *cellGroupConfig,
                                int rnti);
 
 int configure_NR_SL_Preconfig(int sync_source);
-/** @}*/
 #endif
 
