@@ -377,6 +377,8 @@ int rrc_gNB_process_NGAP_INITIAL_CONTEXT_SETUP_REQ(MessageDef *msg_p, instance_t
   UE->amf_ue_ngap_id = req->amf_ue_ngap_id;
   uint8_t nb_pdusessions_tosetup = req->nb_of_pdusessions;
   if (nb_pdusessions_tosetup) {
+    LOG_E(NR_RRC, "PDU sessions in Initial context setup request not handled by E1 yet\n");
+    return 0;
     AssertFatal(false, "PDU sessions in Initial context setup request not handled by E1 yet\n");
     /* this code should pass by E1: commenting here for future reference, but
      * already handled in E1 for the "normal case" of a separate request for

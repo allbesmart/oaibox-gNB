@@ -1246,9 +1246,13 @@ extern "C" {
       case 61440000:
         // from usrp_time_offset
         //openair0_cfg[0].samples_per_packet    = 2048;
-        openair0_cfg[0].tx_sample_advance     = 15;
         openair0_cfg[0].tx_bw                 = 40e6;
         openair0_cfg[0].rx_bw                 = 40e6;
+        if (openair0_cfg[0].tx_freq[0] == openair0_cfg[0].rx_freq[0]) { // TDD
+          openair0_cfg[0].tx_sample_advance = 15;
+        } else { // FDD
+          openair0_cfg[0].tx_sample_advance = -1024;
+        }
         break;
 
       case 46080000:
@@ -1261,9 +1265,13 @@ extern "C" {
       case 30720000:
         // from usrp_time_offset
         //openair0_cfg[0].samples_per_packet    = 2048;
-        openair0_cfg[0].tx_sample_advance     = 15;
         openair0_cfg[0].tx_bw                 = 20e6;
         openair0_cfg[0].rx_bw                 = 20e6;
+        if (openair0_cfg[0].tx_freq[0] == openair0_cfg[0].rx_freq[0]) { // TDD
+          openair0_cfg[0].tx_sample_advance = 15;
+        } else { // FDD
+          openair0_cfg[0].tx_sample_advance = -512;
+        }
         break;
 
       case 23040000:
@@ -1275,9 +1283,13 @@ extern "C" {
 
       case 15360000:
         //openair0_cfg[0].samples_per_packet    = 2048;
-        openair0_cfg[0].tx_sample_advance     = 45;
         openair0_cfg[0].tx_bw                 = 10e6;
         openair0_cfg[0].rx_bw                 = 10e6;
+        if (openair0_cfg[0].tx_freq[0] == openair0_cfg[0].rx_freq[0]) { // TDD
+          openair0_cfg[0].tx_sample_advance = 45;
+        } else { // FDD
+          openair0_cfg[0].tx_sample_advance = -128;
+        }
         break;
 
       case 7680000:
@@ -1324,9 +1336,13 @@ extern "C" {
       case 30720000:
         s->usrp->set_master_clock_rate(30.72e6);
         //openair0_cfg[0].samples_per_packet    = 1024;
-        openair0_cfg[0].tx_sample_advance     = 115;
         openair0_cfg[0].tx_bw                 = 20e6;
         openair0_cfg[0].rx_bw                 = 20e6;
+        if (openair0_cfg[0].tx_freq[0] == openair0_cfg[0].rx_freq[0]) { // TDD
+          openair0_cfg[0].tx_sample_advance = 115;
+        } else { // FDD
+          openair0_cfg[0].tx_sample_advance = -256;
+        }
         break;
 
       case 23040000:
@@ -1340,9 +1356,13 @@ extern "C" {
       case 15360000:
         s->usrp->set_master_clock_rate(30.72e06);
         //openair0_cfg[0].samples_per_packet    = 1024;
-        openair0_cfg[0].tx_sample_advance     = 103;
         openair0_cfg[0].tx_bw                 = 20e6;
         openair0_cfg[0].rx_bw                 = 20e6;
+        if (openair0_cfg[0].tx_freq[0] == openair0_cfg[0].rx_freq[0]) { // TDD
+          openair0_cfg[0].tx_sample_advance = 103;
+        } else { // FDD
+          openair0_cfg[0].tx_sample_advance = -128;
+        }
         break;
 
       case 7680000:
@@ -1393,6 +1413,10 @@ extern "C" {
                                       openair0_cfg[0].tune_offset);
       s->usrp->set_rx_freq(rx_tune_req, i+choffset);
       set_rx_gain_offset(&openair0_cfg[0],i,bw_gain_adjust);
+      // Reset any rx_gain_offset
+      for (int chain_index = 0; chain_index < 4; chain_index++) {
+        openair0_cfg[0].rx_gain_offset[chain_index] = 0.0;
+      }
       ::uhd::gain_range_t gain_range = s->usrp->get_rx_gain_range(i+choffset);
       // limit to maximum gain
       double gain=openair0_cfg[0].rx_gain[i]-openair0_cfg[0].rx_gain_offset[i];
