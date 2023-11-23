@@ -510,6 +510,7 @@ int8_t nr_ue_scheduled_response(nr_scheduled_response_t *scheduled_response){
                         tx_req_body->pdu_length,
                         current_harq_pid);
                   memcpy(harq_process_ul_ue->a, tx_req_body->pdu, tx_req_body->pdu_length);
+                  harq_process_ul_ue->first_tx = 1;
                   break;
                 }
               }

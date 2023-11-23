@@ -35,6 +35,8 @@
 #include "radio/COMMON/common_lib.h"
 #include "LAYER2/nr_pdcp/nr_pdcp_oai_api.h"
 
+static int total_freq_offset = 0;
+
 /*
  *  NR SLOT PROCESSING SEQUENCE
  *
@@ -444,7 +446,8 @@ static void UE_synch(void *arg) {
       nr_get_carrier_frequencies(UE, &dl_carrier, &ul_carrier);
 
       if (nr_initial_sync(&syncD->proc, UE, 2, get_softmodem_params()->sa) == 0) {
-        freq_offset = UE->common_vars.freq_offset; // frequency offset computed with pss in initial sync
+        freq_offset = total_freq_offset + UE->common_vars.freq_offset; // frequency offset computed with pss in initial sync
+        total_freq_offset = freq_offset;
         hw_slot_offset = ((UE->rx_offset<<1) / UE->frame_parms.samples_per_subframe * UE->frame_parms.slots_per_subframe) +
                          round((float)((UE->rx_offset<<1) % UE->frame_parms.samples_per_subframe)/UE->frame_parms.samples_per_slot0);
 
@@ -460,6 +463,11 @@ static void UE_synch(void *arg) {
               openair0_cfg[UE->rf_map.card].tx_freq[0]);
 
         UE->rfdevice.trx_set_freq_func(&UE->rfdevice,&openair0_cfg[0]);
+        LOG_A(PHY, "Adjusting hardware frequency by %d Hz (computed SSB offset %d Hz)\n", total_freq_offset, UE->common_vars.freq_offset);
+        if (abs(UE->common_vars.freq_offset) > abs(UE->frame_parms.subcarrier_spacing / 100)) {
+          LOG_W(PHY, "Computed SSB offset %d Hz > %d Hz, resynchronizing again...\n", UE->common_vars.freq_offset, (UE->frame_parms.subcarrier_spacing / 100));
+          return;
+        }
         if (UE->UE_scan_carrier == 1)
           UE->UE_scan_carrier = 0;
         else
@@ -731,6 +739,10 @@ static inline int get_readBlockSize(uint16_t slot, NR_DL_FRAME_PARMS *fp) {
   return rem_samples + next_slot_first_symbol;
 }
 
+static int dl_stats_counter = 0;
+static int dl_stats_timer = 1000;
+static int sib1_decoded = 0;
+
 void *UE_thread(void *arg)
 {
   //this thread should be over the processing thread to keep in real time
@@ -906,6 +918,36 @@ void *UE_thread(void *arg)
     if (UE->timing_advance != timing_advance) {
       writeBlockSize -= UE->timing_advance - timing_advance;
       timing_advance = UE->timing_advance;
+    }
+
+    // No SIB1 found, need to synch again... This avoids the screen overflooded of LLLLLLLLLLs infinitely
+    if (mac->state == UE_SYNC && sib1_decoded == 0 && curMsg.proc.frame_rx > (mac->mib_frame + 10)) {
+      UE->is_synchronized = false;
+      syncRunning=false;
+      LOG_W(PHY, "\nNo SIB1 found, need to synch again...\n");
+      continue;
+    }
+
+    // Check for DL
+    if (UE->dl_stats[0] < 1000) {
+      if (UE->dl_stats[0] == dl_stats_counter) {
+        //LOG_W(PHY, "dl_stats_counter: %d dl_stats_timer: %d\n", dl_stats_counter, dl_stats_timer);
+        dl_stats_timer--;
+      } else {
+        dl_stats_timer = 1000;
+        dl_stats_counter = UE->dl_stats[0];
+      }
+
+      if (dl_stats_timer < 0) {
+        sib1_decoded = 1;
+        dl_stats_timer = 1000;
+        UE->is_synchronized = false;
+        syncRunning = false;
+        mac->state = UE_SYNC;
+        mac->ra.ra_state = RA_UE_IDLE;
+        LOG_W(PHY, "\nNo DLSCH received, need to synch again...\n");
+        continue;
+      }
     }
 
     if (curMsg.proc.nr_slot_tx == 0)

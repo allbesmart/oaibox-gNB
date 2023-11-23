@@ -1188,7 +1188,7 @@ static void rrc_handle_RRCSetupRequest(gNB_RRC_INST *rrc, sctp_assoc_t assoc_id,
      */
     if ((ue_context_p = rrc_gNB_ue_context_random_exist(rrc, random_value))) {
       LOG_W(NR_RRC, "new UE rnti (coming with random value) is already there, removing UE %x from MAC/PHY\n", msg->crnti);
-      AssertFatal(false, "not implemented\n");
+      rrc_gNB_remove_ue_context(rrc, ue_context_p);
     }
 
     ue_context_p = rrc_gNB_create_ue_context(assoc_id, msg->crnti, rrc, random_value, msg->gNB_DU_ue_id);
@@ -2609,7 +2609,7 @@ void rrc_gNB_trigger_new_bearer(int rnti)
   drb->pDCP_SN_Size_DL = E1AP_PDCP_SN_Size_s_18;
 
   drb->discardTimer = E1AP_DiscardTimer_infinity;
-  drb->reorderingTimer = E1AP_T_Reordering_ms0;
+  drb->reorderingTimer = E1AP_T_Reordering_ms1000;
 
   drb->rLC_Mode = E1AP_RLC_Mode_rlc_am;
 
