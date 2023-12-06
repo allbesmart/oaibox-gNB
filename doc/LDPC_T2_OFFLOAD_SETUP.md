@@ -131,14 +131,14 @@ sudo ./nr_dlsim -n300 -s30 -R 106 -e 27 -c
 ```
 
 # OTA test
-Offload of the channel encoding and decoding to the AMD Xilinx T2 card is enabled by *--ldpc-offload-enable 1* option.
+Offload of the channel encoding and decoding to the AMD Xilinx T2 card is enabled by *--ldpc-offload-t2* option.
 
 ## Run OAI gNB with USRP B210
 ```
 cd ~/openairinterface5g
 source oaienv
 cd cmake_targets/ran_build/build
-sudo ./nr-softmodem --sa -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.fr1.106PRB.usrpb210.conf --ldpc-offload-enable 1
+sudo ./nr-softmodem --sa -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa.band78.fr1.106PRB.usrpb210.conf --ldpc-offload-t2
 ```
 
 # Limitations
