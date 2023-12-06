@@ -968,7 +968,7 @@ int32_t LDPCinit()
 
   int socket_id = GET_SOCKET(info.socket_id);
   int out_max_sz = 8448; // max code block size (for BG1), 22 * 384
-  int in_max_sz = 25344; // max number of encoded bits (for BG1), 66 * 384
+  int in_max_sz = 32*1024; // max number of encoded bits (for BG2 and MCS0)
   int num_ops = 1;
   int f_ret = create_mempools(ad, socket_id, num_ops, out_max_sz, in_max_sz);
   if (f_ret != TEST_SUCCESS) {
