@@ -21,8 +21,8 @@ This documentation aims to provide a tutorial for AMD Xilinx T2 Telco card integ
 # Requirements
 
  - bitstream image and PMD driver for the T2 card provided by AccelerComm
- - DPDK 20.11.7 with patch from Accelercomm (also tested with DPDK 20.11.3)
- - tested on RHEL7.9, RHEL9.2, Ubuntu 20.04, Ubuntu 22.04
+ - DPDK 20.11.9 with patch from Accelercomm
+ - tested on RHEL7.9, RHEL9.2, Ubuntu 22.04
 
 # DPDK setup
 ## DPDK installation
@@ -30,7 +30,7 @@ This documentation aims to provide a tutorial for AMD Xilinx T2 Telco card integ
 # Get DPDK source code
 git clone https://github.com/DPDK/dpdk-stable.git ~/dpdk-stable
 cd ~/dpdk-stable
-git checkout v20.11.7
+git checkout v20.11.9
 git apply ~/ACL_BBDEV_DPDK20.11.3_xxx.patch
 ```
 Replace `~/ACL_BBDEV_DPDK20.11.3_xxx.patch` by patch file provided by
@@ -47,8 +47,7 @@ sudo ldconfig
 ## DPDK configuration
  - load required kernel module
 ```
-sudo modprobe igb_uio
-sudo insmod ~/dpdk-stable/kernel/linux/igb_uio/igb_uio.ko
+sudo modprobe vfio-pci
 ```
  - check presence of the card and its PCI addres on the host machine
 ```
@@ -56,7 +55,7 @@ lspci | grep "Xilinx"
 ```
  - bind the card with igb_uio driver
 ```
-sudo python3 ~/dpdk-stable/usertools/dpdk-devbind.py -b igb_uio 41:00.0
+sudo python3 ~/dpdk-stable/usertools/dpdk-devbind.py --bind=vfio-pci 41:00.0
 ```
 Replace PCI address of the card *41:00.0* by address detected by *lspci | grep "Xilinx"* command
  - hugepages setup (10 x 1GB hugepages)
@@ -106,7 +105,7 @@ cd ~/openairinterface5g/cmake_targets
 cd ~/openairinterface5g
 source oaienv
 cd cmake_targets
-./build_oai -w USRP --ninja --gNB -P -C --build-lib "ldpc_t2"
+./build_oai -w USRP --ninja --gNB -P --build-lib "ldpc_t2" -C
 ```
 Shared object file *libldpc_t2.so* is created during the compilation. This object is conditionally compiled. Selection of the library to compile is done using *--build-lib ldpc_t2*.
 
