@@ -21,19 +21,21 @@ This documentation aims to provide a tutorial for AMD Xilinx T2 Telco card integ
 # Requirements
 
  - bitstream image and PMD driver for the T2 card provided by AccelerComm
- - DPDK 20.11.9 with patch from Accelercomm
+ - DPDK 20.11.9 with patch from Accelercomm: version ACCL_BBDEV_DPDK20.11.3_ldpc_3.1.918.patch
  - tested on RHEL7.9, RHEL9.2, Ubuntu 22.04
 
 # DPDK setup
 ## DPDK installation
+*Note: Following instructions are valid for ACCL_BBDEV_DPDK20.11.3_ldpc_3.1.918.patch version, which is compatible with DPDK 20.11.9. Installation steps, which should be followed for older versions of the patch file (for example ACL_BBDEV_DPDK20.11.3_BL_1006_build_1105_dev_branch_MCT_optimisations_1106_physical_std.patch) are present in older version of this documentation, under the tag 2023.w48.*
+
 ```
 # Get DPDK source code
 git clone https://github.com/DPDK/dpdk-stable.git ~/dpdk-stable
 cd ~/dpdk-stable
 git checkout v20.11.9
-git apply ~/ACL_BBDEV_DPDK20.11.3_xxx.patch
+git apply ~/ACL_BBDEV_DPDK20.11.3_ldpc_3.1.918.patch
 ```
-Replace `~/ACL_BBDEV_DPDK20.11.3_xxx.patch` by patch file provided by
+Replace `~/ACL_BBDEV_DPDK20.11.3_ldpc_3.1.918.patch` by patch file provided by
 Accelercomm.
 ```
 cd ~/dpdk-stable
@@ -53,7 +55,7 @@ sudo modprobe vfio-pci
 ```
 lspci | grep "Xilinx"
 ```
- - bind the card with igb_uio driver
+ - bind the card with vfio-pci driver
 ```
 sudo python3 ~/dpdk-stable/usertools/dpdk-devbind.py --bind=vfio-pci 41:00.0
 ```
