@@ -757,7 +757,11 @@ void SLIV2SL(int SLIV,int *S,int *L) {
 
 nr_sco_info_t get_ssb_subcarrier_offset(int scs, uint32_t absoluteFrequencySSB, uint32_t absoluteFrequencyPointA)
 {
-  nr_sco_info_t sco;
+  nr_sco_info_t sco = {
+    .absolute_diff = absoluteFrequencySSB - absoluteFrequencyPointA,
+    .scaling = 1,
+    .subcarrier_offset = 0
+  };
   // for FR1 k_SSB expressed in terms of 15kHz SCS
   // for FR2 k_SSB expressed in terms of the subcarrier spacing provided by the higher-layer parameter subCarrierSpacingCommon
   sco.absolute_diff = (absoluteFrequencySSB - absoluteFrequencyPointA);
