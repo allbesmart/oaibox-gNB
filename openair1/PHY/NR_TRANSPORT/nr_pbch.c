@@ -228,7 +228,8 @@ int nr_generate_pbch(nfapi_nr_dl_tti_ssb_pdu *ssb_pdu,
                      uint8_t n_hf,
                      int sfn,
                      nfapi_nr_config_request_scf_t *config,
-                     NR_DL_FRAME_PARMS *frame_parms) {
+                     NR_DL_FRAME_PARMS *frame_parms)
+{
   int k,l,m;
   //int16_t a;
   int16_t mod_pbch_e[NR_POLAR_PBCH_E];

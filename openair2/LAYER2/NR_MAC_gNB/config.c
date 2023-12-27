@@ -329,9 +329,10 @@ static void config_common(gNB_MAC_INST *nrmac, int pdsch_AntennaPorts, int pusch
    cfg->ssb_table.ssb_period.value = *scc->ssb_periodicityServingCell;
    cfg->ssb_table.ssb_period.tl.tag = NFAPI_NR_CONFIG_SSB_PERIOD_TAG;
    cfg->num_tlv++;
-   cfg->ssb_table.ssb_subcarrier_offset.value =
-       get_ssb_subcarrier_offset(*scc->downlinkConfigCommon->frequencyInfoDL->absoluteFrequencySSB,
-                                 scc->downlinkConfigCommon->frequencyInfoDL->absoluteFrequencyPointA);
+   nr_sco_info_t sco = get_ssb_subcarrier_offset(*scc->ssbSubcarrierSpacing,
+                                                 *scc->downlinkConfigCommon->frequencyInfoDL->absoluteFrequencySSB,
+                                                 scc->downlinkConfigCommon->frequencyInfoDL->absoluteFrequencyPointA);
+   cfg->ssb_table.ssb_subcarrier_offset.value = sco.subcarrier_offset;
    AssertFatal(cfg->ssb_table.ssb_subcarrier_offset.value < 16,
                "cannot handle ssb_subcarrier_offset %d resulting from Point A %ld SSB %ld: please increase dl_absoluteFrequencyPointA "
                "in the config by 16\n",
