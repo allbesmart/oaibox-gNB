@@ -144,7 +144,6 @@ sudo ./nr-softmodem --sa -O ../../../targets/PROJECTS/GENERIC-NR-5GC/CONF/gnb.sa
 
 # Limitations
 ## AMD Xilinx T2 card
- - offload of the LDPC encoding implemented for MCS > 2, OAI CPU encoder is used for MCS =< 2
  - functionality of the LDPC encoding and decoding offload verified in OTA SISO setup with USRP N310 and Quectel RM500Q, blocking of the card reported for MIMO setup (2 layers)
 
 *Note: AMD Xilinx T1 Telco card is not supported anymore.*
