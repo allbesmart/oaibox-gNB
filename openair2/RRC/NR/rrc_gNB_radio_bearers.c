@@ -81,7 +81,7 @@ void generateDRB(gNB_RRC_UE_t *ue,
     est_drb->pdcp_config.discardTimer = NR_PDCP_Config__drb__discardTimer_infinity;
     est_drb->pdcp_config.pdcp_SN_SizeDL = NR_PDCP_Config__drb__pdcp_SN_SizeDL_len18bits;
     est_drb->pdcp_config.pdcp_SN_SizeUL = NR_PDCP_Config__drb__pdcp_SN_SizeUL_len18bits;
-    est_drb->pdcp_config.t_Reordering = NR_PDCP_Config__t_Reordering_ms100;
+    est_drb->pdcp_config.t_Reordering = NR_PDCP_Config__t_Reordering_ms1000;
     est_drb->pdcp_config.headerCompression.present = NR_PDCP_Config__drb__headerCompression_PR_notUsed;
     est_drb->pdcp_config.headerCompression.NotUsed = 0;
     if (do_drb_integrity)

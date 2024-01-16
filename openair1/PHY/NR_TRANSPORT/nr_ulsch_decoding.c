@@ -270,6 +270,8 @@ int decode_offload(PHY_VARS_gNB *phy_vars_gNB,
       LOG_E(PHY, "ulsch_decoding.c: Problem in LDPC decoder offload\n");
       return -1;
     }
+    phy_vars_gNB->segments_count++;
+    phy_vars_gNB->ldpc_iterations_count += decodeIterations;
     bool decodeSuccess = check_crc((uint8_t *)harq_process->c[r], lenWithCrc(harq_process->C, A), crcType(harq_process->C, A));
     if (decodeSuccess) {
       memcpy(harq_process->b + offset, harq_process->c[r], Kr_bytes - (harq_process->F >> 3) - ((harq_process->C > 1) ? 3 : 0));

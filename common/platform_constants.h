@@ -81,8 +81,8 @@
 #define RAB_OFFSET 0x000F
 
 // RLC Entity
-#define RLC_TX_MAXSIZE       10000000
-#define RLC_RX_MAXSIZE       10000000
+#define RLC_TX_MAXSIZE       100000000
+#define RLC_RX_MAXSIZE       100000000
 #define SEND_MRW_ON 240
 #define MAX_ANT 8
 // CBA constant
