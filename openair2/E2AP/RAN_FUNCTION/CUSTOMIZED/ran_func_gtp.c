@@ -53,13 +53,42 @@ bool read_gtp_sm(void * data)
   else {
     return false;
   }
-
-  #if defined (NGRAN_GNB_CUCP) && defined (NGRAN_GNB_CUUP)
-  if (RC.nrrrc[0]->node_type == ngran_gNB_DU || RC.nrrrc[0]->node_type == ngran_gNB_CUCP) return false;
+  if (RC.nrrrc[0]->node_type == ngran_gNB_DU || RC.nrrrc[0]->node_type == ngran_gNB_CUCP)
+    return false;
   assert((RC.nrrrc[0]->node_type == ngran_gNB_CU || RC.nrrrc[0]->node_type == ngran_gNB) && "Expected node types: CU or gNB-mono");
+
 
   for (size_t i = 0; i < num_ues; i++) {
     rrc_gNB_ue_context_t *ue_context_p = rrc_gNB_get_ue_context(RC.nrrrc[0], ue_id_list[i]);
+    if (ue_context_p) {
+      if (ue_context_p->ue_context.measResults) {
+        gtp->msg.ngut[i].ue_context_rrc_ue_id = ue_context_p->ue_context.rrc_ue_id;
+        gtp->msg.ngut[i].ue_context_rnti_t = ue_context_p->ue_context.rnti;
+        gtp->msg.ngut[i].ue_context_mqr_rsrp = 0;
+        gtp->msg.ngut[i].ue_context_mqr_rsrq = 0;
+        gtp->msg.ngut[i].ue_context_mqr_sinr = 0;
+
+        gtp->msg.ngut[i].ue_context_has_mqr = false;
+
+        NR_MeasResults_t* measResults = ue_context_p->ue_context.measResults;
+        if(measResults->measResultServingMOList.list.count > 0 && measResults->measResultServingMOList.list.array[0] != NULL){
+          NR_MeasResultServMO_t *measResultServMOCopy = (NR_MeasResultServMO_t*) malloc(sizeof(NR_MeasResultServMO_t));
+          memcpy(measResultServMOCopy, measResults->measResultServingMOList.list.array[0], sizeof(NR_MeasResultServMO_t));
+          NR_MeasResultNR_t *measResultNrCopy = &measResultServMOCopy->measResultServingCell;
+
+          if (measResultNrCopy && measResultNrCopy->measResult.cellResults.resultsSSB_Cell != NULL) {
+            NR_MeasQuantityResults_t *mqrCopy = measResultNrCopy->measResult.cellResults.resultsSSB_Cell;
+            //            gtp->msg.ngut[i].ue_context_mqr_rsrp = *mqrCopy->rsrp - 156;
+            gtp->msg.ngut[i].ue_context_mqr_rsrp = 0;
+            gtp->msg.ngut[i].ue_context_mqr_rsrq = (float)(*mqrCopy->rsrq - 87) / 2.0f;
+            gtp->msg.ngut[i].ue_context_mqr_sinr = (float)(*mqrCopy->sinr - 46) / 2.0f;
+            gtp->msg.ngut[i].ue_context_has_mqr = true;
+          }
+
+          free(measResultServMOCopy);
+        }
+      }
+    }
 
     gtp->msg.ngut[i].rnti = ue_id_list[i];
     int nb_pdu_session = ue_context_p->ue_context.nb_of_pdusessions;
@@ -77,6 +106,7 @@ bool read_gtp_sm(void * data)
 
   return true;
 
+  #if defined (NGRAN_GNB_CUCP) && defined (NGRAN_GNB_CUUP)
   #elif defined (NGRAN_GNB_CUUP)
   // For the moment, CU-UP doesn't store PDU session information
   printf("GTP SM not yet implemented in CU-UP\n");

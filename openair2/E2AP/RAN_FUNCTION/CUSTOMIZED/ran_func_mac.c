@@ -92,6 +92,21 @@ bool read_mac_sm(void* data)
     rd->ul_mcs2 = 0;
     rd->phr = sched_ctrl->ph;
 
+    rd->pcmax = sched_ctrl->pcmax;
+    rd->pmi_cqi_ri = sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.ri + 1;
+    rd->pmi_cqi_X1 = sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.pmi_x1;
+    rd->pmi_cqi_X2 = sched_ctrl->CSI_report.cri_ri_li_pmi_cqi_report.pmi_x2;
+    rd->raw_rssi = (float)UE->UE_sched_ctrl.raw_rssi / 10.0;
+    uint8_t cqi = (UE->UE_sched_ctrl.pucch_snrx10 + 640) / 5.0 / 10.0;
+    if (cqi > 15) {
+      cqi = 15;
+    }
+    rd->cqi =cqi;
+    if (UE->UE_sched_ctrl.CSI_report.cri_ri_li_pmi_cqi_report.wb_cqi_1tb != 0) {
+      rd->cqi = UE->UE_sched_ctrl.CSI_report.cri_ri_li_pmi_cqi_report.wb_cqi_1tb;
+    }
+    rd->rsrp = UE->mac_stats.num_rsrp_meas > 0 ? UE->mac_stats.cumul_rsrp / UE->mac_stats.num_rsrp_meas : 0;
+
     const uint32_t bufferSize = sched_ctrl->estimated_ul_buffer - sched_ctrl->sched_ul_bytes;
     rd->bsr = bufferSize;
 
