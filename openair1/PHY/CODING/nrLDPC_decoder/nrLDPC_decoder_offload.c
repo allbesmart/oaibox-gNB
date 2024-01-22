@@ -941,7 +941,7 @@ int32_t LDPCinit()
   int dev_id = 0;
   struct rte_bbdev_info info;
   struct active_device *ad = active_devs;
-  char *dpdk_dev = "41:00.0"; //PCI address of the card
+  char *dpdk_dev = "01:00.0"; //PCI address of the card
   char *argv_re[] = {"bbdev", "-a", dpdk_dev, "-l", "14-15", "--file-prefix=b6", "--"};
   // EAL initialization, if already initialized (init in xran lib) try to probe DPDK device
   ret = rte_eal_init(5, argv_re);

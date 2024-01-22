@@ -452,16 +452,39 @@ static void UE_synch(void *arg) {
 
         // rerun with new cell parameters and frequency-offset
         // todo: the freq_offset computed on DL shall be scaled before being applied to UL
-        nr_rf_card_config_freq(&openair0_cfg[UE->rf_map.card], ul_carrier, dl_carrier, freq_offset);
+        nr_rf_card_config_freq(&openair0_cfg[UE->rf_map.card],
+                               (uint64_t)openair0_cfg[UE->rf_map.card].tx_freq[0],
+                               (uint64_t)openair0_cfg[UE->rf_map.card].rx_freq[0],
+                               freq_offset);
 
-        LOG_I(PHY,"Got synch: hw_slot_offset %d, carrier off %d Hz, rxgain %f (DL %f Hz, UL %f Hz)\n",
+        LOG_I(PHY,
+              "Got synch: hw_slot_offset %d, carrier off %d Hz, rxgain %f (DL %f Hz, UL %f Hz)\n",
               hw_slot_offset,
               freq_offset,
               openair0_cfg[UE->rf_map.card].rx_gain[0],
               openair0_cfg[UE->rf_map.card].rx_freq[0],
               openair0_cfg[UE->rf_map.card].tx_freq[0]);
 
-        UE->rfdevice.trx_set_freq_func(&UE->rfdevice,&openair0_cfg[0]);
+        UE->rfdevice.trx_set_freq_func(&UE->rfdevice, &openair0_cfg[0]);
+
+        LOG_A(PHY,
+              "Adjusting hardware frequency offset to %d Hz (computed SSB offset %d Hz)\n",
+              (int)((double)dl_carrier - openair0_cfg[UE->rf_map.card].rx_freq[0]),
+              UE->common_vars.freq_offset);
+
+        if (abs(UE->common_vars.freq_offset) > abs(UE->frame_parms.subcarrier_spacing / 100)) {
+          LOG_W(PHY,
+                "Computed SSB offset %d Hz > %d Hz, resynchronizing again...\n",
+                UE->common_vars.freq_offset,
+                (UE->frame_parms.subcarrier_spacing / 100));
+          // Reset frequency offset after applying new frequency with nr_rf_card_config_freq
+          UE->common_vars.freq_offset = 0;
+          return;
+        }
+
+        // Reset frequency offset after applying new frequency with nr_rf_card_config_freq
+        UE->common_vars.freq_offset = 0;
+
         if (UE->UE_scan_carrier == 1)
           UE->UE_scan_carrier = 0;
         else
@@ -761,6 +784,11 @@ static inline int get_readBlockSize(uint16_t slot, NR_DL_FRAME_PARMS *fp) {
   return rem_samples + next_slot_first_symbol;
 }
 
+static int dl_stats_counter = 0;
+const int dl_stats_timer_default = 10000;
+static int dl_stats_timer = dl_stats_timer_default;
+static int sib1_decoded = 0;
+
 void *UE_thread(void *arg)
 {
   //this thread should be over the processing thread to keep in real time
@@ -942,6 +970,50 @@ void *UE_thread(void *arg)
     if (UE->timing_advance != timing_advance) {
       writeBlockSize -= UE->timing_advance - timing_advance;
       timing_advance = UE->timing_advance;
+    }
+
+    // No SIB1 found, need to synch again... This avoids the screen overflooded of LLLLLLLLLLs infinitely
+    if (mac->state == UE_SYNC && sib1_decoded == 0 && curMsg.proc.frame_rx > (mac->mib_frame + 10)) {
+      UE->is_synchronized = false;
+      LOG_W(PHY, "No SIB1 found, need to synch again...\n");
+    }
+
+    // Check for DL
+    if (UE->dl_stats[0] < 200) {
+      if (UE->dl_stats[0] == dl_stats_counter) {
+        //LOG_W(PHY, "dl_stats_counter: %d dl_stats_timer: %d\n", dl_stats_counter, dl_stats_timer);
+        dl_stats_timer--;
+      } else {
+        dl_stats_timer = dl_stats_timer_default;
+        dl_stats_counter = UE->dl_stats[0];
+      }
+      if (dl_stats_timer < 0) {
+        sib1_decoded = 1;
+        UE->is_synchronized = false;
+        LOG_W(PHY, "No DLSCH received, need to synch again...\n");
+      }
+    }
+
+    if (UE->is_synchronized == false) {
+      syncRunning = false;
+      mac->state = UE_SYNC;
+      mac->ra.ra_state = RA_UE_IDLE;
+      dl_stats_timer = dl_stats_timer_default;
+
+      uint64_t dl_carrier, ul_carrier;
+      nr_get_carrier_frequencies(UE, &dl_carrier, &ul_carrier);
+
+      // rerun with new cell parameters and frequency-offset
+      // todo: the freq_offset computed on DL shall be scaled before being applied to UL
+      nr_rf_card_config_freq(&openair0_cfg[UE->rf_map.card], ul_carrier, dl_carrier, 0);
+      UE->rfdevice.trx_set_freq_func(&UE->rfdevice, &openair0_cfg[0]);
+      // Reset frequency offset after applying new frequency with nr_rf_card_config_freq
+      UE->common_vars.freq_offset = 0;
+      LOG_I(PHY,
+            "Resetting DL RF frequency to %ld Hz and UL RF frequency to %ld Hz) before restarting synchronization\n",
+            dl_carrier,
+            ul_carrier);
+      continue;
     }
 
     if (curMsg.proc.nr_slot_tx == 0)

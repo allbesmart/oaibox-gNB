@@ -247,6 +247,8 @@ static void nr_postDecode(PHY_VARS_gNB *gNB, notifiedFIFO_elt_t *req)
   nfapi_nr_pusch_pdu_t *pusch_pdu = &gNB->ulsch[rdata->ulsch_id].harq_process->ulsch_pdu;
   bool decodeSuccess = (rdata->decodeIterations <= rdata->decoderParms.numMaxIter);
   ulsch_harq->processedSegments++;
+  gNB->segments_count++;
+  gNB->ldpc_iterations_count += rdata->decodeIterations;
   LOG_D(PHY,
         "processing result of segment: %d, processed %d/%d\n",
         rdata->segment_r,
