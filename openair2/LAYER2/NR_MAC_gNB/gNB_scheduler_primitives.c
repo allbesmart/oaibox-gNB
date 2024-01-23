@@ -160,6 +160,7 @@ uint16_t get_pm_index(const gNB_MAC_INST *nrmac,
   if (antenna_ports == 2)
     return 1 + prev_layers_size + x2;  // 0 for identity matrix
   else
+    return 0;
     AssertFatal(1==0,"More than 2 antenna ports not yet supported\n");
 }
 
