@@ -27,11 +27,7 @@
 #include "openair2/LAYER2/NR_MAC_gNB/mac_proto.h"
 #include "openair2/E2AP/flexric/src/util/time_now_us.h"
 #include "openair2/LAYER2/nr_pdcp/nr_pdcp_oai_api.h"
-
-
-#if defined (NGRAN_GNB_CUCP)
 #include "openair2/RRC/NR/rrc_gNB_UE_context.h"
-#endif
 
 bool read_gtp_sm(void * data)
 {
@@ -78,11 +74,10 @@ bool read_gtp_sm(void * data)
 
           if (measResultNrCopy && measResultNrCopy->measResult.cellResults.resultsSSB_Cell != NULL) {
             NR_MeasQuantityResults_t *mqrCopy = measResultNrCopy->measResult.cellResults.resultsSSB_Cell;
-            //            gtp->msg.ngut[i].ue_context_mqr_rsrp = *mqrCopy->rsrp - 156;
-            gtp->msg.ngut[i].ue_context_mqr_rsrp = 0;
+            gtp->msg.ngut[i].ue_context_has_mqr = true;
+            gtp->msg.ngut[i].ue_context_mqr_rsrp = *mqrCopy->rsrp - 156;
             gtp->msg.ngut[i].ue_context_mqr_rsrq = (float)(*mqrCopy->rsrq - 87) / 2.0f;
             gtp->msg.ngut[i].ue_context_mqr_sinr = (float)(*mqrCopy->sinr - 46) / 2.0f;
-            gtp->msg.ngut[i].ue_context_has_mqr = true;
           }
 
           free(measResultServMOCopy);
